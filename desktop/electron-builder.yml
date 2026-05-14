@@ -1,0 +1,27 @@
+appId: com.ausverse.ai
+productName: Ausverse AI
+directories:
+  output: dist
+  buildResources: .
+forceCodeSigning: false
+
+win:
+  target:
+    - nsis
+  icon: icon.ico
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: "Ausverse AI"
+
+files:
+  - main.js
+  - preload.js
+  - package.json
+  - "!node_modules"
+
+asar: false

@@ -1,0 +1,60 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+
+# build
+/build
+
+# env
+.env*
+
+# runtime data (server-managed, never committed)
+/data/
+
+# uploaded files (server-managed)
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+# deploy scripts (contain server IPs / paths)
+deploy-local.sh
+
+# desktop build output
+/desktop/dist/
+/desktop/out/
+/desktop/node_modules/
+/desktop/package-lock.json
+
+# database
+*.db
+*.sqlite
+
+# os
+.DS_Store
+Thumbs.db
+
+# editor / ide
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# claude
+.claude/
+
+# misc
+*.pem
+.vercel/
+.wrangler/
