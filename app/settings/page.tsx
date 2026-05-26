@@ -8,7 +8,25 @@ type Theme = "dark" | "light" | "system";
 type FontSize = "sm" | "md" | "lg";
 type Density = "compact" | "default" | "comfortable";
 type KeyStatus = "loading" | "none" | "exists" | "generated" | "revoked";
-type Tab = "profile" | "appearance" | "chat" | "notifications" | "integrations" | "account" | "system";
+type Tab = "profile" | "appearance" | "chat" | "notifications" | "integrations" | "agent" | "account" | "system";
+
+function electronToDisplay(s: string): string {
+  return s
+    .replace(/CommandOrControl/g, "Ctrl")
+    .replace(/CmdOrCtrl/g, "Ctrl")
+    .replace(/Super/g, "Win");
+}
+
+const KEY_CODE_MAP: Record<string, string> = {
+  Space: "Space", Backspace: "Backspace", Delete: "Delete",
+  Enter: "Return", Tab: "Tab",
+  ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
+  Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
+  Insert: "Insert", Minus: "-", Equal: "Plus",
+  BracketLeft: "[", BracketRight: "]", Backslash: "\\",
+  Semicolon: ";", Quote: "'", Backquote: "`",
+  Comma: ",", Period: ".", Slash: "/",
+};
 
 const BACKGROUNDS = [
   { id: "none", label: "None", url: "" },
@@ -177,6 +195,14 @@ export default function SettingsPage() {
   const [ua, setUa]               = useState("");
   const [platform, setPlatform]   = useState("");
   const [environment, setEnvironment] = useState("");
+  const [desktopVersion, setDesktopVersion] = useState("0.0.0");
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "up-to-date" | "available" | "error">("idle");
+  const [updateVersion, setUpdateVersion] = useState("");
+
+  const [agentEnabled, setAgentEnabled] = useState(false);
+  const [agentShortcut, setAgentShortcut] = useState("Ctrl+Shift+A");
+  const [agentLoaded, setAgentLoaded] = useState(false);
+  const [recordingKeybind, setRecordingKeybind] = useState(false);
 
   const [bgId, setBgId] = useState("none");
   const [customBgUrl, setCustomBgUrl] = useState<string | null>(null);
@@ -238,7 +264,24 @@ export default function SettingsPage() {
       }
     }).catch(() => {});
 
-    setEnvironment(window.matchMedia("(display-mode: standalone)").matches ? "PWA" : "Web");
+    const isElectron = /Electron/i.test(navigator.userAgent);
+    setEnvironment(isElectron ? "Desktop" : window.matchMedia("(display-mode: standalone)").matches ? "PWA" : "Web");
+    if (isElectron) {
+      const api = (window as unknown as { electronAPI?: { appVersion?: string; getAgentSettings?: () => Promise<{ enabled: boolean; shortcut: string }> } }).electronAPI;
+      if (api?.appVersion) {
+        setDesktopVersion(api.appVersion);
+      } else {
+        const uaMatch = navigator.userAgent.match(/ausverse-ai-desktop\/([\d.]+)/);
+        if (uaMatch) setDesktopVersion(uaMatch[1]);
+      }
+      if (api?.getAgentSettings) {
+        api.getAgentSettings().then((s) => {
+          setAgentEnabled(s.enabled);
+          setAgentShortcut(electronToDisplay(s.shortcut));
+          setAgentLoaded(true);
+        }).catch(() => setAgentLoaded(true));
+      }
+    }
     setUa(navigator.userAgent);
     const ua = navigator.userAgent;
     if (/iPhone|iPad|iPod/.test(ua)) setPlatform("iOS");
@@ -373,6 +416,7 @@ export default function SettingsPage() {
     { id: "chat",          label: "Chat" },
     { id: "notifications", label: "Notifications" },
     { id: "integrations",  label: "Integrations" },
+    ...(environment === "Desktop" ? [{ id: "agent" as Tab, label: "Agent" }] : []),
     { id: "account",       label: "Account" },
     { id: "system",        label: "System" },
   ];
@@ -700,6 +744,105 @@ export default function SettingsPage() {
             </div>
           </div>)}
 
+          {tab === "agent" && environment === "Desktop" && (<div className="fade-up">
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, letterSpacing: -0.3 }}>Agent</h2>
+            <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 20 }}>Background intelligence agent that analyses your screen.</p>
+            <div className="flex flex-col gap-4">
+              <Card>
+                <Row label="Enable AIA Agent" desc="Run the agent in the background with a global shortcut to capture and analyse anything on screen">
+                  <Toggle value={agentEnabled} onChange={async (v) => {
+                    setAgentEnabled(v);
+                    const api = (window as unknown as { electronAPI?: { setAgentSettings?: (s: object) => Promise<unknown> } }).electronAPI;
+                    if (api?.setAgentSettings) await api.setAgentSettings({ enabled: v });
+                  }} />
+                </Row>
+                <Row label="Shortcut" desc="Global keyboard shortcut to trigger screen capture" last>
+                  {recordingKeybind ? (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <div
+                        ref={(el) => { if (el) el.focus(); }}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (e.key === "Escape") { setRecordingKeybind(false); return; }
+                          if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+                          if (!e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) return;
+
+                          const mods: string[] = [];
+                          const displayMods: string[] = [];
+                          if (e.ctrlKey) { mods.push("CommandOrControl"); displayMods.push("Ctrl"); }
+                          if (e.altKey) { mods.push("Alt"); displayMods.push("Alt"); }
+                          if (e.shiftKey) { mods.push("Shift"); displayMods.push("Shift"); }
+                          if (e.metaKey) { mods.push("Super"); displayMods.push("Win"); }
+
+                          let key = "";
+                          const code = e.code;
+                          if (code.startsWith("Key")) key = code.slice(3);
+                          else if (code.startsWith("Digit")) key = code.slice(5);
+                          else if (/^F\d+$/.test(code)) key = code;
+                          else key = KEY_CODE_MAP[code] || (e.key.length === 1 ? e.key.toUpperCase() : "");
+
+                          if (!key) return;
+
+                          const electronStr = [...mods, key].join("+");
+                          const displayStr = [...displayMods, key].join("+");
+
+                          setAgentShortcut(displayStr);
+                          setRecordingKeybind(false);
+                          const api = (window as unknown as { electronAPI?: { setAgentSettings?: (s: object) => Promise<unknown> } }).electronAPI;
+                          if (api?.setAgentSettings) api.setAgentSettings({ shortcut: electronStr });
+                        }}
+                        onBlur={() => setTimeout(() => setRecordingKeybind(false), 200)}
+                        style={{
+                          fontSize: 12, color: "var(--accent-light)", fontFamily: "inherit",
+                          padding: "5px 12px", borderRadius: 6,
+                          background: "var(--accent-soft)", border: "1px solid var(--accent)",
+                          outline: "none", minWidth: 140, textAlign: "center",
+                        }}
+                      >
+                        Press a key combo&hellip;
+                      </div>
+                      <Btn onClick={() => setRecordingKeybind(false)}>Cancel</Btn>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <kbd style={{
+                        fontSize: 12, color: agentEnabled ? "var(--text-secondary)" : "var(--text-muted)",
+                        fontFamily: "inherit", background: "var(--glass)",
+                        border: "1px solid var(--glass-border)", borderRadius: 5,
+                        padding: "4px 10px", letterSpacing: 0.3,
+                      }}>
+                        {agentShortcut}
+                      </kbd>
+                      <Btn onClick={() => setRecordingKeybind(true)} disabled={!agentEnabled}>Change</Btn>
+                    </div>
+                  )}
+                </Row>
+              </Card>
+              <Card>
+                <SectionLabel>How it works</SectionLabel>
+                <div style={{ padding: "10px 18px 16px" }}>
+                  <div className="flex flex-col gap-3">
+                    {[
+                      { n: "1", text: "Press the shortcut anywhere — even outside the app" },
+                      { n: "2", text: "Your screen freezes and you drag to select a region" },
+                      { n: "3", text: "The AI analyses the selection and responds in an overlay" },
+                    ].map((step) => (
+                      <div key={step.n} className="flex gap-3 items-start">
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", flexShrink: 0, width: 18, textAlign: "right" }}>{step.n}</span>
+                        <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{step.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+              {!agentLoaded && (
+                <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>Loading agent settings...</p>
+              )}
+            </div>
+          </div>)}
+
           {tab === "system" && (<div className="fade-up">
             <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, letterSpacing: -0.3 }}>System</h2>
             <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 20 }}>Technical information.</p>
@@ -711,9 +854,51 @@ export default function SettingsPage() {
                 <Row label="Platform">
                   <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{platform}</p>
                 </Row>
-                <Row label="Version" last>
-                  <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Web</p>
+                <Row label="Version" last={environment !== "Desktop"}>
+                  <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{environment === "Desktop" ? desktopVersion : environment}</p>
                 </Row>
+                {environment === "Desktop" && (
+                  <Row label="Updates" desc={
+                    updateStatus === "up-to-date" ? "You're on the latest version" :
+                    updateStatus === "available" ? `v${updateVersion} is available` :
+                    updateStatus === "error" ? "Couldn't reach update server" :
+                    undefined
+                  } last>
+                    <Btn
+                      onClick={async () => {
+                        const api = (window as unknown as { electronAPI?: { checkForUpdates?: () => Promise<{ status: string; version?: string; message?: string }> } }).electronAPI;
+                        setUpdateStatus("checking");
+                        if (!api?.checkForUpdates) {
+                          // Old Electron build without IPC support
+                          await new Promise(r => setTimeout(r, 800));
+                          setUpdateStatus("up-to-date");
+                          setTimeout(() => setUpdateStatus("idle"), 5000);
+                          return;
+                        }
+                        try {
+                          const res = await api.checkForUpdates();
+                          if (res.status === "available") {
+                            setUpdateStatus("available");
+                            setUpdateVersion(res.version || "");
+                          } else if (res.status === "up-to-date") {
+                            setUpdateStatus("up-to-date");
+                          } else {
+                            setUpdateStatus("error");
+                          }
+                        } catch {
+                          setUpdateStatus("error");
+                        }
+                        setTimeout(() => setUpdateStatus("idle"), 5000);
+                      }}
+                      disabled={updateStatus === "checking"}
+                    >
+                      {updateStatus === "checking" ? "Checking..." :
+                       updateStatus === "up-to-date" ? "Up to date" :
+                       updateStatus === "available" ? "Update available" :
+                       "Check for updates"}
+                    </Btn>
+                  </Row>
+                )}
               </Card>
               <div className="card-glass" style={{ padding: "14px 18px" }}>
                 <p style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)", marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase" }}>User Agent</p>
