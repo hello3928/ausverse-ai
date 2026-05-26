@@ -1,7 +1,4 @@
 # Ausverse AI
-
-A secure, clearance-gated intelligence terminal. Deployed at [ausverseai.com](https://ausverseai.com).
-
 ---
 
 ## Stack
@@ -15,22 +12,8 @@ A secure, clearance-gated intelligence terminal. Deployed at [ausverseai.com](ht
 - **CDN** — Cloudflare
 - **PWA** — Installable on iOS, Android, and desktop via `/install`
 
----
 
-## Features
-
-- **Role system** — Three tiers: `user`, `operator` (full info access), `admin` (management console)
-- **AI terminal** — Streaming chat with tool calling, web search, RAG context injection, and archive embedding
-- **API keys** — Personal `aia_...` keys for external integrations (bots, automation)
-- **Archive** — Admin-managed file archive with image/video/document support
-- **Session sync** — Chat sessions stored server-side, synced across devices
-- **Management console** — User approval, role management, announcements, system prompt editor, log viewer
-- **Status page** — Live infrastructure health checks at `/status`
-- **Desktop app** — Electron wrapper for Windows with custom frameless titlebar
-- **Page transitions** — Smooth animated transitions between all pages
-- **Theming** — Dark/light modes, custom backgrounds, font size and density controls
-
----
+-
 
 ## Project Structure
 
