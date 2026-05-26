@@ -5,6 +5,11 @@ directories:
   buildResources: .
 forceCodeSigning: false
 
+publish:
+  provider: github
+  owner: hello3928
+  repo: ausverse-ai
+
 win:
   target:
     - nsis
@@ -21,7 +26,11 @@ nsis:
 files:
   - main.js
   - preload.js
+  - agent-preload.js
+  - agent-capture-preload.js
+  - agent-overlay.html
+  - agent-capture.html
   - package.json
-  - "!node_modules"
+  - icon.ico
 
-asar: false
+asar: true
