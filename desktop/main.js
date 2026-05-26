@@ -14,6 +14,7 @@ let agentOverlay = null;
 let captureWindow = null;
 let capturedScreenshot = null;
 let updateReady = null;
+let agentPromptAttempted = false;
 
 // ── Agent Settings (persisted to disk) ───────────────────
 
@@ -437,40 +438,55 @@ function createWindow() {
 
 function showAgentPromptIfNeeded() {
   const settings = loadAgentSettings();
-  if (settings.promptShown || !mainWindow) return;
+  if (settings.promptShown || !mainWindow || agentPromptAttempted) return;
 
-  // Wait for the page to fully load, then inject the prompt
+  // Skip auth pages — wait until user is on a real page
+  const url = mainWindow.webContents.getURL();
+  try {
+    const path = new URL(url).pathname;
+    if (path === "/login" || path === "/signup" || path.startsWith("/error")) return;
+  } catch { return; }
+
+  // Only attempt once per app session
+  agentPromptAttempted = true;
+
+  // Verify the user is actually logged in before showing the prompt
   setTimeout(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     mainWindow.webContents.executeJavaScript(`
       (function() {
         if (document.getElementById('av-agent-prompt')) return;
 
-        var overlay = document.createElement('div');
-        overlay.id = 'av-agent-prompt';
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:ctxIn 200ms ease-out;';
+        fetch('/api/v1/session/auth').then(function(r) { return r.json(); }).then(function(d) {
+          if (!d.loggedIn) return;
+          if (document.getElementById('av-agent-prompt')) return;
 
-        overlay.innerHTML = '<div style="width:380px;background:rgba(12,12,18,0.95);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:28px 24px;box-shadow:0 16px 48px rgba(0,0,0,0.6);text-align:center;">'
-          + '<div style="width:44px;height:44px;border-radius:11px;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:12px;font-weight:700;color:#f87171;letter-spacing:0.5px;">Av</div>'
-          + '<h2 style="font-size:16px;font-weight:600;color:#f5f5f5;margin:0 0 6px;letter-spacing:-0.3px;">AIA Agent</h2>'
-          + '<p style="font-size:12px;color:#71717a;line-height:1.6;margin:0 0 20px;">A background intelligence agent that runs on your desktop. Press <kbd style=\\'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;padding:1px 6px;font-size:11px;color:#a1a1aa;font-family:inherit;\\'>Ctrl+Shift+A</kbd> anywhere to screenshot and analyse anything on screen with AI.</p>'
-          + '<div style="display:flex;gap:8px;justify-content:center;">'
-          + '<button id="av-agent-skip" style="font-size:12px;font-weight:500;color:#71717a;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:7px;padding:8px 20px;cursor:pointer;font-family:inherit;transition:all 0.15s;">Not now</button>'
-          + '<button id="av-agent-enable" style="font-size:12px;font-weight:600;color:#fff;background:#dc2626;border:1px solid rgba(220,38,38,0.5);border-radius:7px;padding:8px 20px;cursor:pointer;font-family:inherit;transition:all 0.15s;">Enable Agent</button>'
-          + '</div>'
-          + '<p style="font-size:10px;color:#52525b;margin-top:14px;">You can change this later in Settings → Agent</p>'
-          + '</div>';
+          var overlay = document.createElement('div');
+          overlay.id = 'av-agent-prompt';
+          overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:ctxIn 200ms ease-out;';
 
-        document.body.appendChild(overlay);
+          overlay.innerHTML = '<div style="width:380px;background:rgba(12,12,18,0.95);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:28px 24px;box-shadow:0 16px 48px rgba(0,0,0,0.6);text-align:center;">'
+            + '<div style="width:44px;height:44px;border-radius:11px;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:12px;font-weight:700;color:#f87171;letter-spacing:0.5px;">Av</div>'
+            + '<h2 style="font-size:16px;font-weight:600;color:#f5f5f5;margin:0 0 6px;letter-spacing:-0.3px;">AIA Agent</h2>'
+            + '<p style="font-size:12px;color:#71717a;line-height:1.6;margin:0 0 20px;">A background intelligence agent that runs on your desktop. Press <kbd style=\\'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;padding:1px 6px;font-size:11px;color:#a1a1aa;font-family:inherit;\\'>Ctrl+Shift+A</kbd> anywhere to screenshot and analyse anything on screen with AI.</p>'
+            + '<div style="display:flex;gap:8px;justify-content:center;">'
+            + '<button id="av-agent-skip" style="font-size:12px;font-weight:500;color:#71717a;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:7px;padding:8px 20px;cursor:pointer;font-family:inherit;transition:all 0.15s;">Not now</button>'
+            + '<button id="av-agent-enable" style="font-size:12px;font-weight:600;color:#fff;background:#dc2626;border:1px solid rgba(220,38,38,0.5);border-radius:7px;padding:8px 20px;cursor:pointer;font-family:inherit;transition:all 0.15s;">Enable Agent</button>'
+            + '</div>'
+            + '<p style="font-size:10px;color:#52525b;margin-top:14px;">You can change this later in Settings \\u2192 Agent</p>'
+            + '</div>';
 
-        document.getElementById('av-agent-enable').onclick = function() {
-          overlay.remove();
-          window.electronAPI.dismissAgentPrompt(true);
-        };
-        document.getElementById('av-agent-skip').onclick = function() {
-          overlay.remove();
-          window.electronAPI.dismissAgentPrompt(false);
-        };
+          document.body.appendChild(overlay);
+
+          document.getElementById('av-agent-enable').onclick = function() {
+            overlay.remove();
+            window.electronAPI.dismissAgentPrompt(true);
+          };
+          document.getElementById('av-agent-skip').onclick = function() {
+            overlay.remove();
+            window.electronAPI.dismissAgentPrompt(false);
+          };
+        }).catch(function() {});
       })();
     `);
   }, 2000);
