@@ -14,7 +14,6 @@ let agentOverlay = null;
 let captureWindow = null;
 let capturedScreenshot = null;
 let updateReady = null;
-let agentPromptAttempted = false;
 
 // ── Agent Settings (persisted to disk) ───────────────────
 
@@ -43,29 +42,17 @@ function applyAgentShortcut() {
   const settings = loadAgentSettings();
   if (!settings.enabled) {
     console.log("Agent disabled — no shortcut registered");
-    return;
+    return "disabled";
   }
 
   const shortcut = settings.shortcut || DEFAULT_SETTINGS.shortcut;
   try {
     const ok = globalShortcut.register(shortcut, captureAndAnalyse);
-    if (ok) {
-      console.log("Agent shortcut registered:", shortcut);
-    } else {
-      console.error("Agent shortcut already taken by another app:", shortcut);
-      // Retry once after a short delay (sometimes OS needs a moment)
-      setTimeout(() => {
-        try {
-          globalShortcut.unregisterAll();
-          const retry = globalShortcut.register(shortcut, captureAndAnalyse);
-          console.log(retry ? "Agent shortcut registered on retry:" : "Agent shortcut still failed:", shortcut);
-        } catch (e) {
-          console.error("Agent shortcut retry error:", e.message);
-        }
-      }, 500);
-    }
+    console.log(ok ? `Agent shortcut registered: ${shortcut}` : `Agent shortcut failed: ${shortcut}`);
+    return ok ? "ok" : "taken";
   } catch (err) {
     console.error("Failed to register agent shortcut:", err.message);
+    return "error";
   }
 }
 
@@ -407,6 +394,11 @@ function createWindow() {
     showAgentPromptIfNeeded();
   });
 
+  // SPA navigations (Next.js client-side routing after login)
+  mainWindow.webContents.on("did-navigate-in-page", () => {
+    showAgentPromptIfNeeded();
+  });
+
   mainWindow.loadURL(SITE_URL);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -438,17 +430,7 @@ function createWindow() {
 
 function showAgentPromptIfNeeded() {
   const settings = loadAgentSettings();
-  if (settings.promptShown || !mainWindow || agentPromptAttempted) return;
-
-  // Skip auth pages — wait until user is on a real page
-  const url = mainWindow.webContents.getURL();
-  try {
-    const path = new URL(url).pathname;
-    if (path === "/login" || path === "/signup" || path.startsWith("/error")) return;
-  } catch { return; }
-
-  // Only attempt once per app session
-  agentPromptAttempted = true;
+  if (settings.promptShown || !mainWindow) return;
 
   // Verify the user is actually logged in before showing the prompt
   setTimeout(() => {
@@ -534,9 +516,9 @@ app.on("ready", () => {
     const current = loadAgentSettings();
     const updated = { ...current, ...patch };
     saveAgentSettings(updated);
-    applyAgentShortcut();
+    const shortcutStatus = applyAgentShortcut();
     updateTrayMenu();
-    return updated;
+    return { ...updated, shortcutStatus };
   });
 
   // IPC: first-login agent prompt response

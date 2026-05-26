@@ -752,8 +752,15 @@ export default function SettingsPage() {
                 <Row label="Enable AIA Agent" desc="Run the agent in the background with a global shortcut to capture and analyse anything on screen">
                   <Toggle value={agentEnabled} onChange={async (v) => {
                     setAgentEnabled(v);
-                    const api = (window as unknown as { electronAPI?: { setAgentSettings?: (s: object) => Promise<unknown> } }).electronAPI;
-                    if (api?.setAgentSettings) await api.setAgentSettings({ enabled: v });
+                    const api = (window as unknown as { electronAPI?: { setAgentSettings?: (s: object) => Promise<{ shortcutStatus?: string }> } }).electronAPI;
+                    if (api?.setAgentSettings) {
+                      const res = await api.setAgentSettings({ enabled: v });
+                      if (v && res?.shortcutStatus === "taken") {
+                        alert("Shortcut is already in use by another app. Try changing it below.");
+                        setAgentEnabled(false);
+                        await api.setAgentSettings({ enabled: false });
+                      }
+                    }
                   }} />
                 </Row>
                 <Row label="Shortcut" desc="Global keyboard shortcut to trigger screen capture" last>
