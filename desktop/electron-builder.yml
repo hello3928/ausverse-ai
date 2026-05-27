@@ -14,6 +14,7 @@ win:
   target:
     - nsis
   icon: icon.ico
+  signAndEditExecutable: false
 
 nsis:
   oneClick: true
@@ -33,3 +34,5 @@ files:
   - icon.ico
 
 asar: true
+
+afterPack: ./scripts/after-pack.js
