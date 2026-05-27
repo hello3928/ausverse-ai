@@ -828,6 +828,17 @@ export default function SettingsPage() {
                 </Row>
               </Card>
               <Card>
+                <Row label="Test capture" desc="Trigger a screen capture to verify the agent is working" last>
+                  <Btn disabled={!agentEnabled} onClick={async () => {
+                    const api = (window as unknown as { electronAPI?: { testAgentCapture?: () => Promise<{ status: string; shortcutRegistered?: boolean; message?: string }> } }).electronAPI;
+                    if (api?.testAgentCapture) {
+                      const res = await api.testAgentCapture();
+                      if (res.status === "error") alert("Capture failed: " + res.message);
+                    }
+                  }}>Test</Btn>
+                </Row>
+              </Card>
+              <Card>
                 <SectionLabel>How it works</SectionLabel>
                 <div style={{ padding: "10px 18px 16px" }}>
                   <div className="flex flex-col gap-3">

@@ -461,12 +461,31 @@ function showAgentPromptIfNeeded() {
           document.body.appendChild(overlay);
 
           document.getElementById('av-agent-enable').onclick = function() {
-            overlay.remove();
-            window.electronAPI.dismissAgentPrompt(true);
+            var btn = this;
+            btn.textContent = 'Enabling...';
+            btn.disabled = true;
+            window.electronAPI.dismissAgentPrompt(true).then(function(res) {
+              overlay.remove();
+              var toast = document.createElement('div');
+              toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:500;font-family:inherit;animation:ctxIn 200ms ease-out;';
+              if (res && res.shortcutStatus === 'ok') {
+                toast.style.background = 'rgba(34,197,94,0.15)';
+                toast.style.border = '1px solid rgba(34,197,94,0.3)';
+                toast.style.color = '#4ade80';
+                toast.textContent = 'Agent enabled — press Ctrl+Shift+A to capture';
+              } else {
+                toast.style.background = 'rgba(239,68,68,0.15)';
+                toast.style.border = '1px solid rgba(239,68,68,0.3)';
+                toast.style.color = '#f87171';
+                toast.textContent = 'Shortcut could not be registered (status: ' + (res && res.shortcutStatus || 'unknown') + ')';
+              }
+              document.body.appendChild(toast);
+              setTimeout(function() { toast.remove(); }, 4000);
+            }).catch(function() { overlay.remove(); });
           };
           document.getElementById('av-agent-skip').onclick = function() {
             overlay.remove();
-            window.electronAPI.dismissAgentPrompt(false);
+            window.electronAPI.dismissAgentPrompt(false).catch(function() {});
           };
         }).catch(function() {});
       })();
@@ -522,13 +541,30 @@ app.on("ready", () => {
   });
 
   // IPC: first-login agent prompt response
-  ipcMain.on("dismiss-agent-prompt", (_e, enabled) => {
+  ipcMain.handle("dismiss-agent-prompt", (_e, enabled) => {
     const settings = loadAgentSettings();
     settings.promptShown = true;
     settings.enabled = enabled;
     saveAgentSettings(settings);
-    applyAgentShortcut();
+    const shortcutStatus = applyAgentShortcut();
     updateTrayMenu();
+    console.log("dismiss-agent-prompt:", { enabled, shortcutStatus });
+    return { shortcutStatus };
+  });
+
+  // IPC: test agent capture (triggered from settings page)
+  ipcMain.handle("test-agent-capture", async () => {
+    try {
+      const isRegistered = globalShortcut.isRegistered(
+        loadAgentSettings().shortcut || DEFAULT_SETTINGS.shortcut
+      );
+      console.log("Test capture — shortcut registered:", isRegistered);
+      await captureAndAnalyse();
+      return { status: "ok", shortcutRegistered: isRegistered };
+    } catch (err) {
+      console.error("Test capture error:", err);
+      return { status: "error", message: err.message };
+    }
   });
 
   // IPC: close agent overlay
