@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Agent settings
   getAgentSettings: () => ipcRenderer.invoke("get-agent-settings"),
   setAgentSettings: (settings) => ipcRenderer.invoke("set-agent-settings", settings),
-  dismissAgentPrompt: (enabled) => ipcRenderer.invoke("dismiss-agent-prompt", enabled),
+  dismissAgentPrompt: (enabled) => ipcRenderer.send("dismiss-agent-prompt", enabled),
+  onAgentPromptResult: (cb) => ipcRenderer.on("agent-prompt-result", (_e, data) => cb(data)),
   testAgentCapture: () => ipcRenderer.invoke("test-agent-capture"),
 });

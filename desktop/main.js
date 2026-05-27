@@ -460,32 +460,39 @@ function showAgentPromptIfNeeded() {
 
           document.body.appendChild(overlay);
 
-          document.getElementById('av-agent-enable').onclick = function() {
-            var btn = this;
-            btn.textContent = 'Enabling...';
-            btn.disabled = true;
-            window.electronAPI.dismissAgentPrompt(true).then(function(res) {
-              overlay.remove();
+          // Listen for the result from main process
+          if (window.electronAPI.onAgentPromptResult) {
+            window.electronAPI.onAgentPromptResult(function(res) {
               var toast = document.createElement('div');
-              toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:500;font-family:inherit;animation:ctxIn 200ms ease-out;';
-              if (res && res.shortcutStatus === 'ok') {
+              toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:500;font-family:inherit;';
+              if (res.shortcutStatus === 'ok') {
                 toast.style.background = 'rgba(34,197,94,0.15)';
                 toast.style.border = '1px solid rgba(34,197,94,0.3)';
                 toast.style.color = '#4ade80';
-                toast.textContent = 'Agent enabled — press Ctrl+Shift+A to capture';
+                toast.textContent = 'Agent enabled \\u2014 press Ctrl+Shift+A to capture';
+              } else if (res.shortcutStatus === 'disabled') {
+                toast.style.background = 'rgba(113,113,122,0.15)';
+                toast.style.border = '1px solid rgba(113,113,122,0.3)';
+                toast.style.color = '#a1a1aa';
+                toast.textContent = 'Agent disabled';
               } else {
                 toast.style.background = 'rgba(239,68,68,0.15)';
                 toast.style.border = '1px solid rgba(239,68,68,0.3)';
                 toast.style.color = '#f87171';
-                toast.textContent = 'Shortcut could not be registered (status: ' + (res && res.shortcutStatus || 'unknown') + ')';
+                toast.textContent = 'Shortcut failed: ' + res.shortcutStatus;
               }
               document.body.appendChild(toast);
               setTimeout(function() { toast.remove(); }, 4000);
-            }).catch(function() { overlay.remove(); });
+            });
+          }
+
+          document.getElementById('av-agent-enable').onclick = function() {
+            overlay.remove();
+            window.electronAPI.dismissAgentPrompt(true);
           };
           document.getElementById('av-agent-skip').onclick = function() {
             overlay.remove();
-            window.electronAPI.dismissAgentPrompt(false).catch(function() {});
+            window.electronAPI.dismissAgentPrompt(false);
           };
         }).catch(function() {});
       })();
@@ -540,8 +547,8 @@ app.on("ready", () => {
     return { ...updated, shortcutStatus };
   });
 
-  // IPC: first-login agent prompt response
-  ipcMain.handle("dismiss-agent-prompt", (_e, enabled) => {
+  // IPC: first-login agent prompt response (fire-and-forget, feedback via webContents.send)
+  ipcMain.on("dismiss-agent-prompt", (_e, enabled) => {
     const settings = loadAgentSettings();
     settings.promptShown = true;
     settings.enabled = enabled;
@@ -549,7 +556,10 @@ app.on("ready", () => {
     const shortcutStatus = applyAgentShortcut();
     updateTrayMenu();
     console.log("dismiss-agent-prompt:", { enabled, shortcutStatus });
-    return { shortcutStatus };
+    // Send result back to renderer for toast feedback
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("agent-prompt-result", { enabled, shortcutStatus });
+    }
   });
 
   // IPC: test agent capture (triggered from settings page)
