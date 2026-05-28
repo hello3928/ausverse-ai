@@ -513,6 +513,22 @@ async function showAgentPromptIfNeeded() {
   console.log("agent-prompt:", { enabled, shortcutStatus });
 }
 
+// ── Single instance lock ─────────────────────────────────
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    // Someone tried to open a second instance — focus the existing window
+    if (mainWindow) {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 // ── App lifecycle ─────────────────────────────────────────
 
 app.on("ready", () => {
