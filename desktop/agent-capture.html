@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    overflow: hidden;
+    width: 100vw; height: 100vh;
+    cursor: crosshair;
+    background: transparent;
+    user-select: none;
+  }
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+  }
+  .hint {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    text-align: center;
+    transition: opacity 0.15s;
+  }
+  .hint-card {
+    background: rgba(9, 9, 11, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px 20px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .hint-title {
+    font-family: system-ui, sans-serif;
+    font-size: 13px; font-weight: 600;
+    color: #f5f5f5;
+    margin-bottom: 4px;
+  }
+  .hint-sub {
+    font-family: system-ui, sans-serif;
+    font-size: 11px;
+    color: #71717a;
+  }
+  .hint-sub kbd {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: system-ui;
+    font-size: 10px;
+    color: #a1a1aa;
+  }
+</style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="hint" id="hint">
+    <div class="hint-card">
+      <div class="hint-title">Drag to select an area</div>
+      <div class="hint-sub"><kbd>Esc</kbd> to cancel</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const hint = document.getElementById('hint');
+
+    let img = new Image();
+    let startX = 0, startY = 0;
+    let dragging = false;
+    let selX = 0, selY = 0, selW = 0, selH = 0;
+
+    window.captureAPI.onScreenshot((dataUrl) => {
+      img.onload = () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        draw();
+      };
+      img.src = dataUrl;
+    });
+
+    function draw() {
+      // Draw the screenshot
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // Dark overlay on everything
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (dragging && (selW > 2 || selH > 2)) {
+        // Cut out the selected region — show it bright
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(selX, selY, selW, selH);
+        ctx.clip();
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+
+        // Selection border
+        ctx.strokeStyle = 'rgba(220, 38, 38, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.strokeRect(selX, selY, selW, selH);
+
+        // Corner dots
+        const dots = [
+          [selX, selY], [selX + selW, selY],
+          [selX, selY + selH], [selX + selW, selY + selH],
+        ];
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.9)';
+        for (const [dx, dy] of dots) {
+          ctx.beginPath();
+          ctx.arc(dx, dy, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Size label
+        const absW = Math.abs(Math.round(selW));
+        const absH = Math.abs(Math.round(selH));
+        if (absW > 20 && absH > 20) {
+          const label = absW + ' × ' + absH;
+          ctx.font = '600 11px system-ui';
+          const tm = ctx.measureText(label);
+          const lw = tm.width + 14;
+          const lh = 22;
+          const lx = selX + selW / 2 - lw / 2;
+          const ly = selY + selH + 6;
+
+          ctx.fillStyle = 'rgba(220, 38, 38, 0.85)';
+          ctx.beginPath();
+          ctx.roundRect(lx, ly, lw, lh, 4);
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(label, lx + 7, ly + 15);
+        }
+      }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      startX = e.clientX;
+      startY = e.clientY;
+      selX = startX;
+      selY = startY;
+      selW = 0;
+      selH = 0;
+      dragging = true;
+      hint.style.opacity = '0';
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      selX = Math.min(startX, e.clientX);
+      selY = Math.min(startY, e.clientY);
+      selW = Math.abs(e.clientX - startX);
+      selH = Math.abs(e.clientY - startY);
+      draw();
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+
+      // Ignore tiny selections (accidental clicks)
+      if (selW < 10 || selH < 10) {
+        draw();
+        hint.style.opacity = '1';
+        return;
+      }
+
+      // Scale canvas coords to image coords
+      const scaleX = img.naturalWidth / canvas.width;
+      const scaleY = img.naturalHeight / canvas.height;
+
+      window.captureAPI.selectRegion({
+        x: Math.round(selX * scaleX),
+        y: Math.round(selY * scaleY),
+        w: Math.round(selW * scaleX),
+        h: Math.round(selH * scaleY),
+      });
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') window.captureAPI.cancel();
+    });
+  </script>
+</body>
+</html>

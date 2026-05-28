@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    overflow: hidden;
+    background: transparent;
+    height: 100%;
+  }
+  body {
+    font-family: 'Segoe UI', 'SF Pro Text', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .card {
+    background: rgba(12, 12, 18, 0.94);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    animation: slideIn 200ms ease-out;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* ── Header (draggable) ── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px 8px;
+    -webkit-app-region: drag;
+    flex-shrink: 0;
+  }
+  .logo {
+    width: 20px; height: 20px; border-radius: 5px;
+    background: rgba(220, 38, 38, 0.12);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 6px; font-weight: 700; color: #f87171;
+    letter-spacing: 0.3px;
+  }
+  .title {
+    font-size: 11px; font-weight: 600;
+    color: #71717a; letter-spacing: 0.5px;
+    text-transform: uppercase;
+    flex: 1;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .dot.thinking { background: #f59e0b; animation: pulse 1s ease-in-out infinite; }
+  .dot.error    { background: #ef4444; }
+  .close-btn {
+    -webkit-app-region: no-drag;
+    background: none; border: none; cursor: pointer;
+    color: #52525b; font-size: 14px; padding: 0 2px;
+    line-height: 1; transition: color 0.15s;
+  }
+  .close-btn:hover { color: #a1a1aa; }
+
+  /* ── Messages ── */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 14px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.08) transparent;
+  }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  .msg {
+    font-size: 12.5px; line-height: 1.6;
+    animation: fadeIn 150ms ease-out;
+  }
+  .msg.agent {
+    color: #d4d4d8;
+  }
+  .msg.user {
+    color: #a1a1aa;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 6px 10px;
+    align-self: flex-end;
+    max-width: 90%;
+  }
+  .msg.thinking {
+    color: #71717a;
+    font-style: italic;
+  }
+  .msg.error {
+    color: #f87171;
+  }
+
+  /* ── Input ── */
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px 10px;
+    flex-shrink: 0;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .input-row textarea {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 7px 10px;
+    color: #e4e4e7;
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.4;
+    resize: none;
+    outline: none;
+    max-height: 72px;
+    overflow-y: auto;
+    transition: border-color 0.15s;
+  }
+  .input-row textarea::placeholder { color: #52525b; }
+  .input-row textarea:focus { border-color: rgba(220, 38, 38, 0.4); }
+  .input-row textarea:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .send-btn {
+    background: rgba(220, 38, 38, 0.8);
+    border: none;
+    border-radius: 7px;
+    width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: #fff;
+    font-size: 13px;
+    flex-shrink: 0;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .send-btn:hover { background: rgba(220, 38, 38, 1); }
+  .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── Hint ── */
+  .hint {
+    padding: 0 14px 8px;
+    font-size: 9.5px;
+    color: rgba(113, 113, 122, 0.5);
+    letter-spacing: 0.2px;
+    flex-shrink: 0;
+    text-align: center;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div class="logo">Av</div>
+      <span class="title">AIA Agent</span>
+      <div class="dot thinking" id="dot"></div>
+      <button class="close-btn" id="closeBtn" title="Close">&#x2715;</button>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="msg agent thinking" id="initMsg">Analysing screenshot&hellip;</div>
+    </div>
+
+    <div class="input-row">
+      <textarea id="input" rows="1" placeholder="Ask about the screenshot&hellip;" disabled></textarea>
+      <button class="send-btn" id="sendBtn" disabled title="Send">&#x27A4;</button>
+    </div>
+
+    <div class="hint">
+      <kbd style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:1px 5px;font-family:inherit;font-size:9px;color:#a1a1aa;">Esc</kbd> close
+      &nbsp;&middot;&nbsp;
+      <kbd style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:1px 5px;font-family:inherit;font-size:9px;color:#a1a1aa;">Ctrl+Shift+A</kbd> new capture
+    </div>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const initMsg    = document.getElementById('initMsg');
+    const inputEl    = document.getElementById('input');
+    const sendBtn    = document.getElementById('sendBtn');
+    const dot        = document.getElementById('dot');
+    const closeBtn   = document.getElementById('closeBtn');
+
+    let busy = true; // waiting for initial analysis
+
+    function addMessage(text, cls) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + cls;
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return div;
+    }
+
+    function setReady() {
+      busy = false;
+      dot.className = 'dot';
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+
+    function setThinking() {
+      busy = true;
+      dot.className = 'dot thinking';
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
+    }
+
+    // ── Initial analysis result ──
+    window.agentAPI.onResult((text) => {
+      initMsg.textContent = text;
+      initMsg.className = 'msg agent';
+      setReady();
+    });
+
+    window.agentAPI.onError((msg) => {
+      initMsg.textContent = msg;
+      initMsg.className = 'msg error';
+      dot.className = 'dot error';
+      // still allow typing in case it was a transient error
+      busy = false;
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+    });
+
+    // ── Follow-up responses ──
+    window.agentAPI.onFollowUp((text) => {
+      // Remove the "Thinking..." placeholder
+      const thinking = messagesEl.querySelector('.msg.thinking:last-child');
+      if (thinking) thinking.remove();
+      addMessage(text, 'agent');
+      setReady();
+    });
+
+    window.agentAPI.onFollowUpError((msg) => {
+      const thinking = messagesEl.querySelector('.msg.thinking:last-child');
+      if (thinking) thinking.remove();
+      addMessage(msg, 'error');
+      dot.className = 'dot error';
+      busy = false;
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+    });
+
+    // ── Send message ──
+    function send() {
+      const text = inputEl.value.trim();
+      if (!text || busy) return;
+
+      addMessage(text, 'user');
+      inputEl.value = '';
+      inputEl.style.height = 'auto';
+
+      setThinking();
+      addMessage('Thinking…', 'agent thinking');
+
+      window.agentAPI.sendMessage(text);
+    }
+
+    sendBtn.addEventListener('click', send);
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+
+    // Auto-grow textarea
+    inputEl.addEventListener('input', () => {
+      inputEl.style.height = 'auto';
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 72) + 'px';
+    });
+
+    // Close
+    closeBtn.addEventListener('click', () => window.agentAPI.close());
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') window.agentAPI.close();
+    });
+  </script>
+</body>
+</html>

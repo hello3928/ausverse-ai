@@ -15,6 +15,11 @@ let captureWindow = null;
 let capturedScreenshot = null;
 let updateReady = null;
 
+// Agent conversation state (persists while overlay is open)
+let agentImageBase64 = null;   // the screenshot being discussed
+let agentConversation = [];    // [{role, content}] history for multi-turn
+let agentCookieStr = "";       // cached auth cookies
+
 // ── Agent Settings (persisted to disk) ───────────────────
 
 const SETTINGS_PATH = path.join(app.getPath("userData"), "agent-settings.json");
@@ -254,23 +259,27 @@ async function analyseRegion(bounds) {
 
     const base64 = `data:image/png;base64,${cropped.toPNG().toString("base64")}`;
 
+    // Reset conversation state for this new capture
+    agentImageBase64 = base64;
+    agentConversation = [];
+
     // Show the analysis overlay
     showAgentOverlay();
 
-    // Get auth cookies
+    // Get auth cookies (cache for follow-ups)
     const session = mainWindow
       ? mainWindow.webContents.session
       : require("electron").session.defaultSession;
 
     const cookies = await session.cookies.get({ url: SITE_URL });
-    const cookieStr = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    agentCookieStr = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
 
-    // Call the API
+    // Call the API for initial analysis
     const res = await fetch(`${SITE_URL}/api/v1/agent/analyze`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: cookieStr,
+        Cookie: agentCookieStr,
       },
       body: JSON.stringify({ image: base64 }),
     });
@@ -284,18 +293,74 @@ async function analyseRegion(bounds) {
     }
 
     const data = await res.json();
-    sendToOverlay("agent-result", data.text || "No analysis returned.");
+    const text = data.text || "No analysis returned.";
+
+    // Store in conversation history
+    agentConversation.push(
+      { role: "user", content: [
+        { type: "image_url", image_url: { url: base64 } },
+        { type: "text", text: "Analyse this screenshot." },
+      ]},
+      { role: "assistant", content: text },
+    );
+
+    sendToOverlay("agent-result", text);
   } catch (err) {
     console.error("Agent analyse error:", err);
     sendToOverlay("agent-error", "Failed to analyse selection.");
   }
 }
 
+// Called when user sends a follow-up message in the overlay
+async function handleFollowUp(userText) {
+  if (!agentImageBase64 || !agentCookieStr) {
+    sendToOverlay("agent-followup-error", "No active capture session.");
+    return;
+  }
+
+  try {
+    // Add user message to conversation
+    agentConversation.push({ role: "user", content: userText });
+
+    const res = await fetch(`${SITE_URL}/api/v1/agent/analyze`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: agentCookieStr,
+      },
+      body: JSON.stringify({
+        image: agentImageBase64,
+        messages: agentConversation,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Agent follow-up error:", res.status);
+      // Remove the failed user message
+      agentConversation.pop();
+      sendToOverlay("agent-followup-error", "Failed to get response.");
+      return;
+    }
+
+    const data = await res.json();
+    const text = data.text || "No response.";
+
+    // Store assistant reply
+    agentConversation.push({ role: "assistant", content: text });
+
+    sendToOverlay("agent-followup", text);
+  } catch (err) {
+    console.error("Agent follow-up error:", err);
+    agentConversation.pop();
+    sendToOverlay("agent-followup-error", "Failed to get response.");
+  }
+}
+
 function showAgentOverlay() {
   const display = screen.getPrimaryDisplay();
   const { width: sw, height: sh } = display.workAreaSize;
-  const ow = 380;
-  const oh = 220;
+  const ow = 400;
+  const oh = 320;
 
   agentOverlay = new BrowserWindow({
     width: ow,
@@ -305,7 +370,11 @@ function showAgentOverlay() {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    resizable: false,
+    resizable: true,
+    minWidth: 320,
+    minHeight: 200,
+    maxWidth: 600,
+    maxHeight: 600,
     skipTaskbar: true,
     show: false,
     webPreferences: {
@@ -321,40 +390,18 @@ function showAgentOverlay() {
     agentOverlay.show();
   });
 
-  agentOverlay.on("blur", () => {
-    // Close when clicking outside
-    if (agentOverlay && !agentOverlay.isDestroyed()) {
-      agentOverlay.destroy();
-      agentOverlay = null;
-    }
-  });
-
   agentOverlay.on("closed", () => {
     agentOverlay = null;
+    // Clear conversation when overlay is closed
+    agentImageBase64 = null;
+    agentConversation = [];
+    agentCookieStr = "";
   });
 }
 
 function sendToOverlay(channel, data) {
   if (agentOverlay && !agentOverlay.isDestroyed()) {
     agentOverlay.webContents.send(channel, data);
-
-    // Auto-resize height based on content
-    agentOverlay.webContents.executeJavaScript(`
-      document.querySelector('.card').offsetHeight
-    `).then((h) => {
-      if (agentOverlay && !agentOverlay.isDestroyed()) {
-        const newH = Math.min(Math.max(h + 4, 120), 400);
-        const [x] = agentOverlay.getPosition();
-        const display = require("electron").screen.getPrimaryDisplay();
-        const sy = display.workAreaSize.height;
-        agentOverlay.setBounds({
-          x,
-          y: sy - newH - 20,
-          width: 380,
-          height: newH,
-        });
-      }
-    }).catch(() => {});
   }
 }
 
@@ -534,6 +581,11 @@ app.on("ready", () => {
       agentOverlay.destroy();
       agentOverlay = null;
     }
+  });
+
+  // IPC: follow-up message from agent overlay
+  ipcMain.on("agent-send-message", (_e, text) => {
+    handleFollowUp(text);
   });
 
   // IPC: capture selection completed
