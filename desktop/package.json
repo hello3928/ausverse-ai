@@ -1,13 +1,17 @@
 {
   "name": "ausverse-ai-desktop",
-  "version": "0.1.0",
+  "version": "0.1.13",
   "description": "Ausverse AI — Intelligence Terminal",
   "main": "main.js",
   "author": "Ausverse",
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "release": "electron-builder --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
   },
   "devDependencies": {
     "electron": "^35.0.0",

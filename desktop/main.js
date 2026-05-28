@@ -1,6 +1,6 @@
 const {
   app, BrowserWindow, Menu, shell, ipcMain,
-  Tray, globalShortcut, desktopCapturer, screen,
+  Tray, globalShortcut, desktopCapturer, screen, dialog,
 } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
@@ -428,76 +428,42 @@ function createWindow() {
 
 // ── First-login Agent Prompt ─────────────────────────────
 
-function showAgentPromptIfNeeded() {
+async function showAgentPromptIfNeeded() {
   const settings = loadAgentSettings();
   if (settings.promptShown || !mainWindow) return;
 
   // Verify the user is actually logged in before showing the prompt
-  setTimeout(() => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    mainWindow.webContents.executeJavaScript(`
-      (function() {
-        if (document.getElementById('av-agent-prompt')) return;
+  await new Promise((r) => setTimeout(r, 2000));
+  if (!mainWindow || mainWindow.isDestroyed()) return;
 
-        fetch('/api/v1/session/auth').then(function(r) { return r.json(); }).then(function(d) {
-          if (!d.loggedIn) return;
-          if (document.getElementById('av-agent-prompt')) return;
+  let loggedIn = false;
+  try {
+    loggedIn = await mainWindow.webContents.executeJavaScript(
+      `fetch('/api/v1/session/auth').then(r => r.json()).then(d => !!d.loggedIn).catch(() => false)`
+    );
+  } catch { /* ignore */ }
 
-          var overlay = document.createElement('div');
-          overlay.id = 'av-agent-prompt';
-          overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:ctxIn 200ms ease-out;';
+  if (!loggedIn || !mainWindow || mainWindow.isDestroyed()) return;
 
-          overlay.innerHTML = '<div style="width:380px;background:rgba(12,12,18,0.95);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:28px 24px;box-shadow:0 16px 48px rgba(0,0,0,0.6);text-align:center;">'
-            + '<div style="width:44px;height:44px;border-radius:11px;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:12px;font-weight:700;color:#f87171;letter-spacing:0.5px;">Av</div>'
-            + '<h2 style="font-size:16px;font-weight:600;color:#f5f5f5;margin:0 0 6px;letter-spacing:-0.3px;">AIA Agent</h2>'
-            + '<p style="font-size:12px;color:#71717a;line-height:1.6;margin:0 0 20px;">A background intelligence agent that runs on your desktop. Press <kbd style=\\'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:3px;padding:1px 6px;font-size:11px;color:#a1a1aa;font-family:inherit;\\'>Ctrl+Shift+A</kbd> anywhere to screenshot and analyse anything on screen with AI.</p>'
-            + '<div style="display:flex;gap:8px;justify-content:center;">'
-            + '<button id="av-agent-skip" style="font-size:12px;font-weight:500;color:#71717a;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:7px;padding:8px 20px;cursor:pointer;font-family:inherit;transition:all 0.15s;">Not now</button>'
-            + '<button id="av-agent-enable" style="font-size:12px;font-weight:600;color:#fff;background:#dc2626;border:1px solid rgba(220,38,38,0.5);border-radius:7px;padding:8px 20px;cursor:pointer;font-family:inherit;transition:all 0.15s;">Enable Agent</button>'
-            + '</div>'
-            + '<p style="font-size:10px;color:#52525b;margin-top:14px;">You can change this later in Settings \\u2192 Agent</p>'
-            + '</div>';
+  const shortcut = settings.shortcut || DEFAULT_SETTINGS.shortcut;
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: "question",
+    title: "AIA Agent",
+    message: "Enable the AIA Agent?",
+    detail: `A background intelligence agent that runs on your desktop. Press ${shortcut} anywhere to screenshot and analyse anything on screen with AI.\n\nYou can change this later in Settings → Agent.`,
+    buttons: ["Enable Agent", "Not now"],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
 
-          document.body.appendChild(overlay);
-
-          // Listen for the result from main process
-          if (window.electronAPI.onAgentPromptResult) {
-            window.electronAPI.onAgentPromptResult(function(res) {
-              var toast = document.createElement('div');
-              toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:500;font-family:inherit;';
-              if (res.shortcutStatus === 'ok') {
-                toast.style.background = 'rgba(34,197,94,0.15)';
-                toast.style.border = '1px solid rgba(34,197,94,0.3)';
-                toast.style.color = '#4ade80';
-                toast.textContent = 'Agent enabled \\u2014 press Ctrl+Shift+A to capture';
-              } else if (res.shortcutStatus === 'disabled') {
-                toast.style.background = 'rgba(113,113,122,0.15)';
-                toast.style.border = '1px solid rgba(113,113,122,0.3)';
-                toast.style.color = '#a1a1aa';
-                toast.textContent = 'Agent disabled';
-              } else {
-                toast.style.background = 'rgba(239,68,68,0.15)';
-                toast.style.border = '1px solid rgba(239,68,68,0.3)';
-                toast.style.color = '#f87171';
-                toast.textContent = 'Shortcut failed: ' + res.shortcutStatus;
-              }
-              document.body.appendChild(toast);
-              setTimeout(function() { toast.remove(); }, 4000);
-            });
-          }
-
-          document.getElementById('av-agent-enable').onclick = function() {
-            overlay.remove();
-            window.electronAPI.dismissAgentPrompt(true);
-          };
-          document.getElementById('av-agent-skip').onclick = function() {
-            overlay.remove();
-            window.electronAPI.dismissAgentPrompt(false);
-          };
-        }).catch(function() {});
-      })();
-    `);
-  }, 2000);
+  const enabled = result.response === 0;
+  settings.promptShown = true;
+  settings.enabled = enabled;
+  saveAgentSettings(settings);
+  const shortcutStatus = applyAgentShortcut();
+  updateTrayMenu();
+  console.log("agent-prompt:", { enabled, shortcutStatus });
 }
 
 // ── App lifecycle ─────────────────────────────────────────
@@ -547,22 +513,7 @@ app.on("ready", () => {
     return { ...updated, shortcutStatus };
   });
 
-  // IPC: first-login agent prompt response (fire-and-forget, feedback via webContents.send)
-  ipcMain.on("dismiss-agent-prompt", (_e, enabled) => {
-    const settings = loadAgentSettings();
-    settings.promptShown = true;
-    settings.enabled = enabled;
-    saveAgentSettings(settings);
-    const shortcutStatus = applyAgentShortcut();
-    updateTrayMenu();
-    console.log("dismiss-agent-prompt:", { enabled, shortcutStatus });
-    // Send result back to renderer for toast feedback
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("agent-prompt-result", { enabled, shortcutStatus });
-    }
-  });
-
-  // IPC: test agent capture (triggered from settings page)
+// IPC: test agent capture (triggered from settings page)
   ipcMain.handle("test-agent-capture", async () => {
     try {
       const isRegistered = globalShortcut.isRegistered(
