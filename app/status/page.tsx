@@ -211,42 +211,45 @@ export default function StatusPage() {
         </button>
       </>
     }>
-      <div className="max-w-5xl mx-auto px-5 py-10 flex flex-col gap-6 fade-up">
-        {/* Top row: overall status + live checks side by side */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {/* Overall status */}
-          <div className="card-glass" style={{ padding: "16px 20px" }}>
-            <div className="flex items-center gap-3">
-              <div className="relative" style={{ width: 10, height: 10 }}>
+      <div className="mx-auto px-5 py-10 fade-up" style={{ maxWidth: 1400 }}>
+        {/* Overall status banner */}
+        <div className="card-glass" style={{ padding: "12px 20px", marginBottom: 16 }}>
+          <div className="flex items-center gap-3">
+            <div className="relative" style={{ width: 10, height: 10 }}>
+              <div style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: data ? STATUS_COLOR[data.overall] : "var(--text-muted)",
+                transition: "background 0.3s",
+              }} />
+              {data?.overall === "operational" && (
                 <div style={{
-                  width: 10, height: 10, borderRadius: "50%",
-                  background: data ? STATUS_COLOR[data.overall] : "var(--text-muted)",
-                  transition: "background 0.3s",
+                  position: "absolute", inset: -2, borderRadius: "50%",
+                  background: "var(--success)", opacity: 0.3,
+                  animation: "pulse-subtle 2s ease-in-out infinite",
                 }} />
-                {data?.overall === "operational" && (
-                  <div style={{
-                    position: "absolute", inset: -2, borderRadius: "50%",
-                    background: "var(--success)", opacity: 0.3,
-                    animation: "pulse-subtle 2s ease-in-out infinite",
-                  }} />
-                )}
-              </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap" }}>
-                {overallLabel}
-              </p>
+              )}
             </div>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+              {overallLabel}
+            </p>
             {data && (
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6, marginLeft: 22 }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
                 Last checked {new Date(data.timestamp).toLocaleTimeString("en-AU", { timeStyle: "short" })}
-              </p>
+              </span>
             )}
           </div>
+        </div>
 
-          {/* Live checks */}
+        {/* Main content: live checks LEFT, uptime bars RIGHT */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+          {/* Left: Live checks */}
           {data && <div className="card-glass" style={{ overflow: "hidden" }}>
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border)" }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>System Checks</p>
+            </div>
             {data.checks.map((check, i, arr) => (
               <div key={check.name}
-                className="flex items-center justify-between px-5 py-3.5 transition-colors"
+                className="flex items-center justify-between px-5 py-3 transition-colors"
                 style={{
                   borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
                 }}>
@@ -272,27 +275,23 @@ export default function StatusPage() {
               </div>
             ))}
           </div>}
-        </div>
 
-        {/* Uptime history */}
-        {uptimeData && uptimeData.uptime.length > 0 && (
-          <>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginTop: 8 }}>
-              Uptime — past {uptimeData.days} days
-            </p>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 12,
-            }}>
+          {/* Right: Uptime history */}
+          {uptimeData && uptimeData.uptime.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <div style={{ padding: "0 4px" }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                  Uptime — past {uptimeData.days} days
+                </p>
+              </div>
               {uptimeData.uptime.map((service) => (
                 <div key={service.service} className="card-glass">
                   <UptimeBar service={service} />
                 </div>
               ))}
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </PageShell>
   );
