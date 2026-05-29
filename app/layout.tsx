@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import ThemeScript from "@/components/layout/ThemeScript";
+import PageTransitions from "@/components/layout/PageTransitions";
+import ContextMenu from "@/components/ui/ContextMenu";
 
 const jetbrains = JetBrains_Mono({
   variable: "--font-jetbrains",
@@ -36,6 +38,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeScript />
       </head>
       <body className={`${jetbrains.variable} antialiased`}>
+        <PageTransitions />
+        <ContextMenu />
         {children}
       </body>
     </html>

@@ -542,17 +542,12 @@ html[data-theme="light"] .no-invert { filter: invert(1) hue-rotate(180deg); }
   border-radius: 6px;
 }
 
-/* ═══════════════════════════════
-   Page transitions (template mount)
-   ═══════════════════════════════ */
+/* Page transitions handled by PageTransitions.tsx */
 
-@keyframes pageIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.page-in {
-  animation: pageIn 160ms var(--ease-out);
+/* Context menu */
+@keyframes ctxIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 /* ── Mobile settings tab scroll ── */
