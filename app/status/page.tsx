@@ -213,9 +213,9 @@ export default function StatusPage() {
     }>
       <div className="max-w-5xl mx-auto px-5 py-10 flex flex-col gap-6 fade-up">
         {/* Top row: overall status + live checks side by side */}
-        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {/* Overall status */}
-          <div className="card-glass" style={{ padding: "16px 20px", alignSelf: "start" }}>
+          <div className="card-glass" style={{ padding: "16px 20px" }}>
             <div className="flex items-center gap-3">
               <div className="relative" style={{ width: 10, height: 10 }}>
                 <div style={{
