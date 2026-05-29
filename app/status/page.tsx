@@ -211,7 +211,7 @@ export default function StatusPage() {
         </button>
       </>
     }>
-      <div className="max-w-2xl mx-auto px-5 py-10 flex flex-col gap-6 fade-up">
+      <div className="max-w-4xl mx-auto px-5 py-10 flex flex-col gap-6 fade-up">
         {/* Overall status */}
         <div className="card-glass" style={{ padding: "16px 20px" }}>
           <div className="flex items-center gap-3">
@@ -277,11 +277,13 @@ export default function StatusPage() {
             <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginTop: 8 }}>
               Uptime — past {uptimeData.days} days
             </p>
-            <div className="card-glass" style={{ overflow: "hidden" }}>
-              {uptimeData.uptime.map((service, i, arr) => (
-                <div key={service.service} style={{
-                  borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
-                }}>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 12,
+            }}>
+              {uptimeData.uptime.map((service) => (
+                <div key={service.service} className="card-glass">
                   <UptimeBar service={service} />
                 </div>
               ))}
