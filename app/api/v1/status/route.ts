@@ -165,5 +165,24 @@ export async function GET(req: NextRequest) {
     saveAnnouncement("");
   }
 
+  // Log uptime checks to database
+  try {
+    const { getDb } = await import("@/lib/db");
+    const db = getDb();
+    const now = new Date().toISOString();
+    const insert = db.prepare(
+      "INSERT INTO uptime_log (service, status, latency, checked_at) VALUES (?, ?, ?, ?)"
+    );
+    const logMany = db.transaction((items: typeof checks) => {
+      for (const c of items) {
+        insert.run(c.name, c.status, (c as { latency?: number }).latency ?? null, now);
+      }
+    });
+    logMany(checks);
+
+    // Prune entries older than 90 days
+    db.prepare("DELETE FROM uptime_log WHERE checked_at < datetime('now', '-90 days')").run();
+  } catch {}
+
   return NextResponse.json({ overall, checks, timestamp: new Date().toISOString() });
 }

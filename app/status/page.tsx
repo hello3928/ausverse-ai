@@ -15,6 +15,22 @@ interface StatusData {
   timestamp: string;
 }
 
+interface DayHistory {
+  day: string;
+  status: "operational" | "degraded" | "down" | "no_data";
+  uptime: number | null;
+}
+interface ServiceUptime {
+  service: string;
+  uptimePct: number | null;
+  currentStatus: string;
+  history: DayHistory[];
+}
+interface UptimeData {
+  days: number;
+  uptime: ServiceUptime[];
+}
+
 const STATUS_COLOR: Record<string, string> = {
   operational: "var(--success)",
   degraded: "var(--warning)",
@@ -27,8 +43,111 @@ const STATUS_LABEL: Record<string, string> = {
   down: "Offline",
 };
 
+const BAR_COLOR: Record<string, string> = {
+  operational: "var(--success)",
+  degraded: "var(--warning)",
+  down: "var(--danger)",
+  no_data: "var(--border)",
+};
+
+function UptimeBar({ service }: { service: ServiceUptime }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  const statusLabel = STATUS_LABEL[service.currentStatus] ?? "No data";
+  const statusColor = STATUS_COLOR[service.currentStatus] ?? "var(--text-muted)";
+
+  return (
+    <div style={{ padding: "16px 20px" }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+        <div className="flex items-center gap-2">
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+            {service.service}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div style={{
+            width: 6, height: 6, borderRadius: "50%",
+            background: statusColor,
+          }} />
+          <span style={{ fontSize: 12, fontWeight: 500, color: statusColor }}>
+            {statusLabel}
+          </span>
+        </div>
+      </div>
+
+      <div
+        ref={barRef}
+        className="flex gap-px"
+        style={{ height: 32, borderRadius: 4, overflow: "hidden", position: "relative" }}
+        onMouseLeave={() => setHoveredIdx(null)}
+      >
+        {service.history.map((day, i) => (
+          <div
+            key={day.day}
+            onMouseEnter={() => setHoveredIdx(i)}
+            style={{
+              flex: 1,
+              background: BAR_COLOR[day.status],
+              opacity: hoveredIdx !== null && hoveredIdx !== i ? 0.5 : 1,
+              transition: "opacity 0.15s",
+              cursor: "pointer",
+              borderRadius: i === 0 ? "3px 0 0 3px" : i === service.history.length - 1 ? "0 3px 3px 0" : 0,
+            }}
+          />
+        ))}
+
+        {hoveredIdx !== null && (() => {
+          const day = service.history[hoveredIdx];
+          const date = new Date(day.day + "T00:00:00");
+          const label = date.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+          const pct = day.uptime !== null ? `${day.uptime}%` : "No data";
+
+          return (
+            <div
+              style={{
+                position: "absolute",
+                bottom: "calc(100% + 8px)",
+                left: `${(hoveredIdx / service.history.length) * 100}%`,
+                transform: "translateX(-50%)",
+                background: "var(--glass)",
+                border: "1px solid var(--glass-border)",
+                borderRadius: 6,
+                padding: "6px 10px",
+                fontSize: 11,
+                color: "var(--text-secondary)",
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+                zIndex: 10,
+                backdropFilter: "blur(12px)",
+              }}
+            >
+              <span style={{ fontWeight: 600 }}>{label}</span>
+              {" — "}
+              <span style={{ color: BAR_COLOR[day.status] }}>{pct}</span>
+            </div>
+          );
+        })()}
+      </div>
+
+      <div className="flex items-center justify-between" style={{ marginTop: 6 }}>
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          {service.history.length} days ago
+        </span>
+        {service.uptimePct !== null && (
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            {service.uptimePct}% uptime
+          </span>
+        )}
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Today</span>
+      </div>
+    </div>
+  );
+}
+
 export default function StatusPage() {
   const [data, setData] = useState<StatusData | null>(null);
+  const [uptimeData, setUptimeData] = useState<UptimeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState(30);
   const refreshBtnRef = useRef<HTMLButtonElement>(null);
@@ -44,9 +163,14 @@ export default function StatusPage() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/status");
-      const json = await res.json();
-      setData(json);
+      const [statusRes, uptimeRes] = await Promise.all([
+        fetch("/api/v1/status"),
+        fetch("/api/v2/uptime?days=90"),
+      ]);
+      const statusJson = await statusRes.json();
+      setData(statusJson);
+      const uptimeJson = await uptimeRes.json();
+      setUptimeData(uptimeJson);
     } catch {}
     setLoading(false);
     setCountdown(30);
@@ -87,7 +211,8 @@ export default function StatusPage() {
         </button>
       </>
     }>
-      <div className="max-w-xl mx-auto px-5 py-10 flex flex-col gap-6 fade-up">
+      <div className="max-w-2xl mx-auto px-5 py-10 flex flex-col gap-6 fade-up">
+        {/* Overall status */}
         <div className="card-glass" style={{ padding: "16px 20px" }}>
           <div className="flex items-center gap-3">
             <div className="relative" style={{ width: 10, height: 10 }}>
@@ -115,6 +240,7 @@ export default function StatusPage() {
           )}
         </div>
 
+        {/* Live checks */}
         {data && <div className="card-glass" style={{ overflow: "hidden" }}>
           {data.checks.map((check, i, arr) => (
             <div key={check.name}
@@ -144,6 +270,24 @@ export default function StatusPage() {
             </div>
           ))}
         </div>}
+
+        {/* Uptime history */}
+        {uptimeData && uptimeData.uptime.length > 0 && (
+          <>
+            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginTop: 8 }}>
+              Uptime — past {uptimeData.days} days
+            </p>
+            <div className="card-glass" style={{ overflow: "hidden" }}>
+              {uptimeData.uptime.map((service, i, arr) => (
+                <div key={service.service} style={{
+                  borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+                }}>
+                  <UptimeBar service={service} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </PageShell>
   );

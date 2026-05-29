@@ -58,5 +58,16 @@ function initSchema(db: Database.Database) {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS uptime_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      service TEXT NOT NULL,
+      status TEXT NOT NULL,
+      latency INTEGER,
+      checked_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_uptime_service_date
+      ON uptime_log(service, checked_at);
   `);
 }
