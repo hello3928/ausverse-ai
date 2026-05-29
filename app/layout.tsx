@@ -4,6 +4,7 @@ import "./globals.css";
 import ThemeScript from "@/components/layout/ThemeScript";
 import PageTransitions from "@/components/layout/PageTransitions";
 import ContextMenu from "@/components/ui/ContextMenu";
+import ConsoleInit from "@/components/layout/ConsoleInit";
 
 const jetbrains = JetBrains_Mono({
   variable: "--font-jetbrains",
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeScript />
       </head>
       <body className={`${jetbrains.variable} antialiased`}>
+        <ConsoleInit />
         <PageTransitions />
         <ContextMenu />
         {children}
