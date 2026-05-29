@@ -284,11 +284,13 @@ export default function StatusPage() {
                   Uptime — past {uptimeData.days} days
                 </p>
               </div>
-              {uptimeData.uptime.map((service) => (
-                <div key={service.service} className="card-glass">
-                  <UptimeBar service={service} />
-                </div>
-              ))}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {uptimeData.uptime.map((service) => (
+                  <div key={service.service} className="card-glass">
+                    <UptimeBar service={service} />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
