@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getUserByUsername, updateUser, createAuthSession, deleteAuthSession } from "@/lib/data";
+import { getUserByUsername, updateUser, createAuthSession, deleteAuthSession, SESSION_TTL_SECONDS } from "@/lib/data";
 import { SESSION_COOKIE, getSessionUser } from "@/lib/auth";
 import { sendAlert, escapeHtml } from "@/lib/email";
 import { cookies } from "next/headers";
@@ -62,6 +62,6 @@ export async function POST(req: NextRequest) {
 
   const token = createAuthSession(user.username);
   const res = NextResponse.json({ ok: true, role: user.role });
-  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(60 * 60 * 24 * 365));
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(SESSION_TTL_SECONDS));
   return res;
 }

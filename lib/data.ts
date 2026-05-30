@@ -194,7 +194,8 @@ export function getArchiveItem(id: string): ArchiveItem | null {
 
 // ─── Auth Sessions ──────────────────────────────────────────────────────────
 
-const SESSION_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
+export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
+const SESSION_MAX_AGE_MS = SESSION_TTL_SECONDS * 1000;
 
 export function createAuthSession(username: string): string {
   const db = getDb();
