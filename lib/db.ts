@@ -6,11 +6,24 @@ const DB_PATH = path.join(process.cwd(), "data", "aia.db");
 let _db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
+  if (_db) {
+    // Health check: verify the connection is still usable
+    try {
+      _db.prepare("SELECT 1").get();
+    } catch {
+      console.error("Database connection lost, reconnecting...");
+      try { _db.close(); } catch {}
+      _db = null;
+    }
+  }
+
   if (!_db) {
     _db = new Database(DB_PATH);
     _db.pragma("journal_mode = WAL");
     _db.pragma("foreign_keys = ON");
+    _db.pragma("busy_timeout = 5000");
     initSchema(_db);
+    pruneOnStartup(_db);
   }
   return _db;
 }
@@ -85,4 +98,14 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_uptime_service_date
       ON uptime_log(service, checked_at);
   `);
+}
+
+/** Run once on startup: prune stale data */
+function pruneOnStartup(db: Database.Database) {
+  try {
+    db.prepare("DELETE FROM uptime_log WHERE checked_at < datetime('now', '-90 days')").run();
+    db.prepare("DELETE FROM incidents WHERE created_at < datetime('now', '-30 days')").run();
+  } catch (e) {
+    console.error("Startup pruning failed:", e instanceof Error ? e.message : e);
+  }
 }
