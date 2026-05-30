@@ -263,7 +263,7 @@ export async function POST(req: NextRequest) {
             logActivity();
             return;
           }
-          console.error("Groq call failed:", res.status, JSON.stringify(errJson));
+          console.error("Groq call failed:", res.status);
           encode("[System offline]");
           controller.close();
           return;
