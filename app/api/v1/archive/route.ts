@@ -17,7 +17,7 @@ const ALLOWED_EXTENSIONS = new Set([
   "pdf","doc","docx","xls","xlsx","ppt","pptx","txt","md","csv",
   "zip","tar","gz","7z","rar",
   "mp3","wav","ogg","aac","flac",
-  "json","xml","html","css","js","ts","bin",
+  "json","xml",
 ]);
 
 export async function GET() {

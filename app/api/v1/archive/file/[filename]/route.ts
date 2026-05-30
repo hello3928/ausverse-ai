@@ -62,6 +62,7 @@ export async function GET(
       "Content-Type": contentType,
       "Content-Length": String(fileSize),
       "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
