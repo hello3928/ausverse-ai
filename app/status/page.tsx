@@ -17,7 +17,7 @@ interface StatusData {
 
 interface DayHistory {
   day: string;
-  status: "operational" | "degraded" | "down" | "no_data";
+  status: "operational" | "degraded" | "down" | "partial" | "no_data";
   uptime: number | null;
 }
 interface ServiceUptime {
@@ -40,12 +40,14 @@ const STATUS_COLOR: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   operational: "Operational",
   degraded: "Degraded",
+  partial: "Temporary Downtime",
   down: "Offline",
 };
 
 const BAR_COLOR: Record<string, string> = {
   operational: "var(--success)",
   degraded: "var(--warning)",
+  partial: "var(--warning)",
   down: "var(--danger)",
   no_data: "var(--border)",
 };

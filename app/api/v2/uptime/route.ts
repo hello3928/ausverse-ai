@@ -39,6 +39,21 @@ export async function GET(req: NextRequest) {
     )
     .all(`-${days}`) as (DayRow & { service: string })[];
 
+  // Get most recent check per service for current status
+  const latestChecks = db
+    .prepare(
+      `SELECT service, status FROM uptime_log
+       WHERE rowid IN (
+         SELECT MAX(rowid) FROM uptime_log GROUP BY service
+       )`
+    )
+    .all() as { service: string; status: string }[];
+
+  const latestStatusMap: Record<string, string> = {};
+  for (const lc of latestChecks) {
+    latestStatusMap[lc.service] = lc.status;
+  }
+
   // Build lookup: service -> { day -> stats }
   const lookup: Record<string, Record<string, DayRow>> = {};
   for (const row of rows) {
@@ -69,9 +84,24 @@ export async function GET(req: NextRequest) {
       totalOp += d.operational;
 
       const pct = Math.round((d.operational / d.total) * 10000) / 100;
-      const status =
-        d.down > 0 ? "down" : d.degraded > 0 ? "degraded" : "operational";
-      return { day, status: status as "operational" | "degraded" | "down", uptime: pct };
+
+      // Determine day status:
+      // - all down = "down" (red)
+      // - mix of down + operational = "partial" (amber — temporary downtime)
+      // - all degraded or mix = "degraded" (amber)
+      // - all operational = "operational" (green)
+      let status: string;
+      if (d.down > 0 && d.operational === 0) {
+        status = "down";
+      } else if (d.down > 0 && d.operational > 0) {
+        status = "partial";
+      } else if (d.degraded > 0) {
+        status = "degraded";
+      } else {
+        status = "operational";
+      }
+
+      return { day, status, uptime: pct };
     });
 
     const uptimePct =
@@ -79,10 +109,13 @@ export async function GET(req: NextRequest) {
         ? Math.round((totalOp / totalChecks) * 10000) / 100
         : null;
 
+    // Current status = most recent individual check, not today's aggregate
+    const currentStatus = latestStatusMap[s.service] ?? "no_data";
+
     return {
       service: s.service,
       uptimePct,
-      currentStatus: history.at(-1)?.status ?? "no_data",
+      currentStatus,
       history,
     };
   });
