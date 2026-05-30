@@ -30,7 +30,7 @@ export async function GET() {
 }
 
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "https://ausverseintelligence.com",
+  "Access-Control-Allow-Origin": process.env.CORS_ORIGIN ?? "https://ausverseai.com",
   "Access-Control-Allow-Methods": "POST",
   "Access-Control-Allow-Credentials": "true",
 };
