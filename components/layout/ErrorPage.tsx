@@ -49,8 +49,26 @@ export default function ErrorPage({ code, reset, error }: { code: number; reset?
   const [pathname, setPathname] = useState("");
 
   useEffect(() => {
-    setUserAgent(navigator.userAgent);
-    setPathname(window.location.pathname + window.location.search);
+    const ua = navigator.userAgent;
+    const p = window.location.pathname + window.location.search;
+    setUserAgent(ua);
+    setPathname(p);
+
+    // Report incident to server
+    fetch("/api/v2/incidents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: incidentId,
+        code,
+        title,
+        path: p,
+        cause: error?.message || null,
+        userAgent: ua,
+        source: "app",
+      }),
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const severityColor = getSeverityColor(severity);

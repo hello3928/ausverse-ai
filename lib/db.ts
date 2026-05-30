@@ -59,6 +59,21 @@ function initSchema(db: Database.Database) {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS incidents (
+      id TEXT PRIMARY KEY,
+      code INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      path TEXT,
+      cause TEXT,
+      edge TEXT,
+      user_agent TEXT,
+      source TEXT NOT NULL DEFAULT 'client',
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_incidents_created
+      ON incidents(created_at);
+
     CREATE TABLE IF NOT EXISTS uptime_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       service TEXT NOT NULL,

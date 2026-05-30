@@ -242,6 +242,23 @@
     document.getElementById('timestamp').textContent = ts;
     document.getElementById('request-path').textContent = path || '/';
 
+    // Report incident to server (may fail if server is down, that's ok)
+    try {
+      fetch('/api/v2/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: incidentId,
+          code: 503,
+          title: 'Service Unavailable',
+          path: path,
+          cause: 'Upstream server not responding',
+          userAgent: navigator.userAgent,
+          source: 'nginx',
+        }),
+      }).catch(function() {});
+    } catch(e) {}
+
     function copyIncident() {
       var report = [
         'Incident: ' + incidentId,

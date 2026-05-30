@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AVATARS } from "@/lib/avatars";
 import PageShell from "@/components/layout/PageShell";
 
-type Section = "home" | "users" | "archive" | "announcements" | "logs";
+type Section = "home" | "users" | "archive" | "announcements" | "incidents" | "logs";
 
 interface User {
   id: string; username: string; role: string;
@@ -14,6 +14,12 @@ interface User {
 }
 interface Stats { totalUsers: number; activeNow: number; }
 interface ArchiveItem { id: string; title: string; type: string; filename: string; createdAt: string; pinned?: boolean; }
+interface Incident {
+  id: string; code: number; title: string;
+  path: string | null; cause: string | null;
+  edge: string | null; user_agent: string | null;
+  source: string; created_at: string;
+}
 interface ManagementData { users: User[]; stats: Stats; }
 
 const INPUT_CLS = "input-glass text-white placeholder-zinc-600 focus:outline-none px-3 py-2.5 text-sm w-full rounded-md";
@@ -23,6 +29,7 @@ const NAV: { key: Section; label: string }[] = [
   { key: "users",         label: "Users" },
   { key: "archive",       label: "Archive" },
   { key: "announcements", label: "Announcements" },
+  { key: "incidents",     label: "Incidents" },
   { key: "logs",          label: "Logs" },
 ];
 
@@ -47,6 +54,9 @@ export default function ManagementPanel({ username }: { username: string }) {
   const [announcement, setAnnouncement] = useState("");
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const [annMsg, setAnnMsg] = useState("");
+
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [incidentsLoading, setIncidentsLoading] = useState(false);
 
   const [logs, setLogs] = useState<{ out: string; error: string } | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -74,6 +84,22 @@ export default function ManagementPanel({ username }: { username: string }) {
     fetch("/api/v1/session/auth").then(r => r.json()).then(d => setAvatar(d.avatar ?? null));
   }, []);
 
+  async function fetchIncidents() {
+    setIncidentsLoading(true);
+    const res = await fetch("/api/v2/incidents");
+    if (res.ok) {
+      const data = await res.json();
+      setIncidents(data.incidents ?? []);
+    }
+    setIncidentsLoading(false);
+  }
+
+  async function clearIncidents() {
+    if (!confirm("Clear all incidents?")) return;
+    await fetch("/api/v2/incidents", { method: "DELETE" });
+    setIncidents([]);
+  }
+
   async function fetchLogs() {
     setLogsLoading(true);
     const res = await fetch("/api/v1/management/logs");
@@ -89,6 +115,7 @@ export default function ManagementPanel({ username }: { username: string }) {
   }
 
   useEffect(() => {
+    if (section === "incidents") fetchIncidents();
     if (section === "logs") fetchLogs();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section]);
@@ -419,6 +446,74 @@ export default function ManagementPanel({ username }: { username: string }) {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {section === "incidents" && (
+          <div className="flex flex-col gap-6 max-w-5xl fade-up">
+            <div className="flex items-center justify-between">
+              <h1 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", letterSpacing: -0.3 }}>
+                Incidents ({incidents.length})
+              </h1>
+              <div className="flex gap-2">
+                <button onClick={fetchIncidents} disabled={incidentsLoading}
+                  className="btn-glow-white"
+                  style={{ fontSize: 12, padding: "6px 14px", background: "var(--glass)", border: "1px solid var(--glass-border)", color: "var(--text-tertiary)", borderRadius: 6, fontFamily: "inherit", cursor: "pointer", opacity: incidentsLoading ? 0.4 : 1 }}>
+                  {incidentsLoading ? "Loading..." : "Refresh"}
+                </button>
+                {incidents.length > 0 && (
+                  <button onClick={clearIncidents}
+                    className="btn-glow-white transition-colors hover:text-[var(--danger)]"
+                    style={{ fontSize: 12, padding: "6px 14px", background: "var(--glass)", border: "1px solid var(--glass-border)", color: "var(--text-muted)", borderRadius: 6, fontFamily: "inherit", cursor: "pointer" }}>
+                    Clear all
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {incidents.length === 0 ? (
+              <div className="card-glass" style={{ padding: "40px 20px", textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: "var(--text-muted)" }}>No incidents recorded.</p>
+              </div>
+            ) : (
+              <div className="card-glass" style={{ overflow: "hidden" }}>
+                {incidents.map((inc, i, arr) => (
+                  <div key={inc.id} style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none", padding: "12px 20px" }}>
+                    <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
+                      <div className="flex items-center gap-3">
+                        <span style={{
+                          fontSize: 13, fontWeight: 600,
+                          color: inc.code >= 500 ? "var(--danger)" : "var(--warning)",
+                        }}>
+                          {inc.code}
+                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>
+                          {inc.title}
+                        </span>
+                        <span style={{
+                          fontSize: 10, fontWeight: 500, padding: "2px 6px",
+                          borderRadius: 4,
+                          background: inc.source === "cloudflare" ? "rgba(249,115,22,0.1)" : inc.source === "nginx" ? "rgba(168,85,247,0.1)" : "rgba(59,130,246,0.1)",
+                          color: inc.source === "cloudflare" ? "#f97316" : inc.source === "nginx" ? "#a855f7" : "#3b82f6",
+                          textTransform: "uppercase", letterSpacing: 0.5,
+                        }}>
+                          {inc.source}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                        {fmt(inc.created_at)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-jetbrains, monospace)" }}>
+                      <span style={{ color: "var(--text-tertiary)" }}>{inc.id}</span>
+                      {inc.path && <span> · {inc.path}</span>}
+                      {inc.cause && <span> · <span style={{ color: "var(--warning)" }}>{inc.cause}</span></span>}
+                      {inc.edge && <span> · edge: {inc.edge}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

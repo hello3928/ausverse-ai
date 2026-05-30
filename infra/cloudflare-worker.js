@@ -148,6 +148,19 @@ const ERROR_PAGE = `<!DOCTYPE html>
     document.getElementById('request-path').textContent = path || '/';
     document.getElementById('edge-location').textContent = edge;
 
+    // Report incident to server
+    try {
+      fetch('/api/v2/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: incidentId, code: code, title: info.title,
+          path: path, cause: info.cause, edge: edge,
+          userAgent: navigator.userAgent, source: 'cloudflare',
+        }),
+      }).catch(function() {});
+    } catch(e) {}
+
     function copyIncident() {
       var report = [
         'Incident: ' + incidentId,
