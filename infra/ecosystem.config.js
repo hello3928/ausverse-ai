@@ -1,10 +1,10 @@
 module.exports = {
   apps: [
     {
-      name: "hall-of-legends",
+      name: "ausverse-ai",
       script: "node_modules/.bin/next",
       args: "start",
-      cwd: "/home/ubuntu/hall-of-legends",
+      cwd: "/var/www/app",
       instances: 1,
       autorestart: true,
       watch: false,

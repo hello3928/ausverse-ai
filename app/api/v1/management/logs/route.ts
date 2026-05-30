@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import { isManagementAuthed } from "@/lib/auth";
 
-const OUT_LOG = "/home/ubuntu/.pm2/logs/hall-of-legends-out-0.log";
-const ERR_LOG = "/home/ubuntu/.pm2/logs/hall-of-legends-error-0.log";
+const PM2_LOG_DIR = process.env.PM2_LOG_DIR ?? "/root/.pm2/logs";
+const PM2_APP_NAME = process.env.PM2_APP_NAME ?? "ausverse-ai";
+const OUT_LOG = `${PM2_LOG_DIR}/${PM2_APP_NAME}-out-0.log`;
+const ERR_LOG = `${PM2_LOG_DIR}/${PM2_APP_NAME}-error-0.log`;
 
 // Read last N bytes of a file and extract the last `lines` non-empty lines.
 // Avoids loading multi-GB log files into memory.
