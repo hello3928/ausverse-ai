@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  const { image, messages } = await req.json();
+  const { image, messages } = await req.json().catch(() => ({}));
 
   if (!image || typeof image !== "string") {
     return NextResponse.json({ error: "No image provided" }, { status: 400 });

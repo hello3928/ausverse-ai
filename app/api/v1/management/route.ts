@@ -26,9 +26,9 @@ export async function PATCH(req: NextRequest) {
   if (!(await isManagementAuthed())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { username, role, approved } = await req.json();
+  const { username, role, approved } = await req.json().catch(() => ({}));
   const users = getUsers();
-  const user = users.find((u) => u.username === username);
+  const user = users.find((u: { username: string }) => u.username === username);
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
   if (role !== undefined) {
     if (!VALID_ROLES.includes(role)) return NextResponse.json({ error: "Invalid role" }, { status: 400 });
@@ -43,7 +43,7 @@ export async function DELETE(req: NextRequest) {
   if (!(await isManagementAuthed())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { username } = await req.json();
+  const { username } = await req.json().catch(() => ({}));
   const currentUser = await getSessionUser();
   if (currentUser?.username === username) {
     return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });

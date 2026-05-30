@@ -22,7 +22,7 @@ export async function DELETE() {
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const sessions = Array.isArray(body.sessions) ? body.sessions : [];
   const trimmed = sessions.slice(0, 100).map((s: Record<string, unknown>) => ({
     ...s,

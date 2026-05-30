@@ -172,7 +172,7 @@ async function executeToolCall(toolCall: any): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
-  const { messages, webSearch } = await req.json();
+  const { messages, webSearch } = await req.json().catch(() => ({ messages: null, webSearch: true }));
   const enableWebSearch = webSearch !== false;
 
   let userRecord = await getSessionUser();

@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { avatarId } = await req.json();
+  const { avatarId } = await req.json().catch(() => ({}));
   const valid = AVATARS.find((a) => a.id === avatarId);
   if (!valid) return NextResponse.json({ error: "Invalid avatar" }, { status: 400 });
 
