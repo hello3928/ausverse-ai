@@ -2,10 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { getUsers, saveUsers } from "@/lib/data";
 import { sendAlert, escapeHtml } from "@/lib/email";
+import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
 
 const USERNAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 export async function POST(req: NextRequest) {
+  // Rate limit signups (3 per hour per IP)
+  const ip = getClientIp(req.headers);
+  const { allowed, retryAfter } = checkRateLimit(`signup:${ip}`, 3, 60 * 60_000);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many signup attempts. Try again later." },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } }
+    );
+  }
+
   const body = await req.json().catch(() => ({}));
   const { username, password } = body;
 

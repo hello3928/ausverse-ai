@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { searchRAG } from "@/lib/rag";
 import { searchWeb } from "@/lib/search";
 import { hashApiKey } from "@/lib/apikeys";
+import { checkRateLimit } from "@/lib/ratelimit";
 
 const systemPromptPath = path.join(process.cwd(), "data", "system-prompt.txt");
 
@@ -188,6 +189,15 @@ export async function POST(req: NextRequest) {
 
   if (!userRecord || userRecord.approved === false) {
     return new NextResponse("Unauthorized", { status: 401 });
+  }
+
+  // Rate limit chat (30 per minute per user)
+  const { allowed, retryAfter } = checkRateLimit(`chat:${userRecord.username}`, 30, 60_000);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many messages. Slow down." },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } }
+    );
   }
 
   const username = userRecord.username;

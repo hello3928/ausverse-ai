@@ -4,6 +4,7 @@ import { getUserByUsername, updateUser, createAuthSession, deleteAuthSession, SE
 import { SESSION_COOKIE, getSessionUser } from "@/lib/auth";
 import { sendAlert, escapeHtml } from "@/lib/email";
 import { cookies } from "next/headers";
+import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
 
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN;
 
@@ -27,6 +28,18 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const { username, password, action } = body;
+
+  // Rate limit login attempts (5 per minute per IP)
+  if (action !== "logout") {
+    const ip = getClientIp(req.headers);
+    const { allowed, retryAfter } = checkRateLimit(`auth:${ip}`, 5, 60_000);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Try again later." },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
+    }
+  }
 
   if (action === "logout") {
     const cookieStore = await cookies();
