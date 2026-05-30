@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   if (username.length < 3) return NextResponse.json({ error: "Username must be at least 3 characters" }, { status: 400 });
   if (username.length > 30) return NextResponse.json({ error: "Username must be 30 characters or fewer" }, { status: 400 });
   if (!USERNAME_RE.test(username)) return NextResponse.json({ error: "Username may only contain letters, numbers, underscores, and hyphens" }, { status: 400 });
-  if (password.length < 6) return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
+  if (password.length < 8) return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
   if (password.length > 256) return NextResponse.json({ error: "Password too long" }, { status: 400 });
 
   const users = getUsers();
