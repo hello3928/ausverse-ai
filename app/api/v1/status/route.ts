@@ -41,18 +41,27 @@ async function checkWebServer(baseUrl: string) {
   };
 }
 
+// Cache Groq health check result for 5 minutes to avoid calling the API every 30s
+let aiCacheResult: { status: "operational" | "degraded" | "down"; detail: string; latency: number } | null = null;
+let aiCacheExpiry = 0;
+const AI_CACHE_TTL_MS = 5 * 60_000;
+
 async function checkAI() {
+  if (aiCacheResult && Date.now() < aiCacheExpiry) return aiCacheResult;
+
   const { result, latency } = await timed(() =>
     fetchWithTimeout("https://api.groq.com/openai/v1/models", {
       headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
     }).then((r) => r.ok)
   ).catch(() => ({ result: false, latency: 0 }));
   const slow = result && latency > DEGRADED_LATENCY_MS;
-  return {
+  aiCacheResult = {
     status: result ? (slow ? "degraded" as const : "operational" as const) : "down" as const,
     detail: result ? (slow ? "AI engine performing slowly" : "AI engine reachable") : "AI engine unreachable",
     latency,
   };
+  aiCacheExpiry = Date.now() + AI_CACHE_TTL_MS;
+  return aiCacheResult;
 }
 
 async function checkOwnAPI(baseUrl: string) {
