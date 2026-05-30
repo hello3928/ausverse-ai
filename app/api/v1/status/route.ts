@@ -191,7 +191,9 @@ export async function GET(req: NextRequest) {
 
     // Prune entries older than 90 days
     db.prepare("DELETE FROM uptime_log WHERE checked_at < datetime('now', '-90 days')").run();
-  } catch {}
+  } catch (e) {
+    console.error("Uptime logging failed:", e instanceof Error ? e.message : e);
+  }
 
   return NextResponse.json({ overall, checks, timestamp: new Date().toISOString() });
 }
