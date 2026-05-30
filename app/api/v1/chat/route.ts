@@ -315,26 +315,31 @@ export async function POST(req: NextRequest) {
 
       const reader = groqRes.body.getReader();
       const decoder = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        for (const line of chunk.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          const d = line.slice(6).trim();
-          if (d === "[DONE]") {
-            controller.close();
-            logActivity();
-            return;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          for (const line of chunk.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            const d = line.slice(6).trim();
+            if (d === "[DONE]") {
+              logActivity();
+              return;
+            }
+            try {
+              const json = JSON.parse(d);
+              const token = json.choices?.[0]?.delta?.content ?? "";
+              if (token) encode(token);
+            } catch {}
           }
-          try {
-            const json = JSON.parse(d);
-            const token = json.choices?.[0]?.delta?.content ?? "";
-            if (token) encode(token);
-          } catch {}
         }
+      } catch (streamErr) {
+        console.error("Stream read error:", streamErr instanceof Error ? streamErr.message : streamErr);
+        try { encode("\n[Stream interrupted]"); } catch {}
+      } finally {
+        controller.close();
       }
-      controller.close();
     },
   });
 
