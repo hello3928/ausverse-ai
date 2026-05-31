@@ -280,31 +280,39 @@ export default function SettingsPage() {
       }
     }).catch(() => {});
 
-    const api = getElectronAPI();
-    const isElectron = !!api;
+    // Detect Electron via UA string (works even if preload fails)
+    const isElectron = /Electron/i.test(navigator.userAgent);
     setEnvironment(isElectron ? "Desktop" : window.matchMedia("(display-mode: standalone)").matches ? "PWA" : "Web");
-    if (isElectron && api) {
-      setDesktopVersion(api.appVersion || "0.0.0");
-      // Timeout: if IPC doesn't respond in 3 seconds, show defaults
-      const timeout = setTimeout(() => {
-        console.warn("Agent settings IPC timed out, using defaults");
+
+    if (isElectron) {
+      // Try to get the API from the preload bridge
+      const api = getElectronAPI();
+      if (api) {
+        setDesktopVersion(api.appVersion || "0.0.0");
+        // Timeout: if IPC doesn't respond in 3 seconds, show defaults
+        const timeout = setTimeout(() => {
+          console.warn("Agent settings IPC timed out, using defaults");
+          setAgentLoaded(true);
+        }, 3000);
+        api.getAgentSettings().then((s) => {
+          clearTimeout(timeout);
+          if (s && typeof s.enabled === "boolean") {
+            setAgentEnabled(s.enabled);
+            setAgentShortcut(electronToDisplay(s.shortcut || "CommandOrControl+Shift+A"));
+          }
+          setAgentLoaded(true);
+        }).catch((err) => {
+          clearTimeout(timeout);
+          console.error("Failed to load agent settings:", err);
+          setAgentLoaded(true);
+        });
+      } else {
+        // Electron detected by UA but preload API missing
+        console.warn("Electron detected but electronAPI not available — preload may have failed");
+        const uaMatch = navigator.userAgent.match(/ausverse-ai-desktop\/([\d.]+)/);
+        if (uaMatch) setDesktopVersion(uaMatch[1]);
         setAgentLoaded(true);
-      }, 3000);
-      api.getAgentSettings().then((s) => {
-        clearTimeout(timeout);
-        if (s && typeof s.enabled === "boolean") {
-          setAgentEnabled(s.enabled);
-          setAgentShortcut(electronToDisplay(s.shortcut || "CommandOrControl+Shift+A"));
-        }
-        setAgentLoaded(true);
-      }).catch((err) => {
-        clearTimeout(timeout);
-        console.error("Failed to load agent settings:", err);
-        setAgentLoaded(true);
-      });
-    } else {
-      // Not in Electron but somehow showing agent tab — mark as loaded
-      setAgentLoaded(true);
+      }
     }
     setUa(navigator.userAgent);
     const ua = navigator.userAgent;
