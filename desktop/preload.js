@@ -1,13 +1,26 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("electronAPI", {
-  isElectron: true,
-  appVersion: require("./package.json").version,
-  installUpdate: () => ipcRenderer.send("install-update"),
-  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+let appVersion = "0.0.0";
+try {
+  appVersion = require("./package.json").version;
+} catch {
+  try {
+    appVersion = require(require("path").join(__dirname, "package.json")).version;
+  } catch {}
+}
 
-  // Agent settings
-  getAgentSettings: () => ipcRenderer.invoke("get-agent-settings"),
-  setAgentSettings: (settings) => ipcRenderer.invoke("set-agent-settings", settings),
-  testAgentCapture: () => ipcRenderer.invoke("test-agent-capture"),
-});
+try {
+  contextBridge.exposeInMainWorld("electronAPI", {
+    isElectron: true,
+    appVersion,
+    installUpdate: () => ipcRenderer.send("install-update"),
+    checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+
+    // Agent settings
+    getAgentSettings: () => ipcRenderer.invoke("get-agent-settings"),
+    setAgentSettings: (settings) => ipcRenderer.invoke("set-agent-settings", settings),
+    testAgentCapture: () => ipcRenderer.invoke("test-agent-capture"),
+  });
+} catch (err) {
+  console.error("Preload failed:", err);
+}
