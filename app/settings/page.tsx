@@ -304,47 +304,20 @@ export default function SettingsPage() {
     setEnvironment(isElectron ? "Desktop" : window.matchMedia("(display-mode: standalone)").matches ? "PWA" : "Web");
 
     if (isElectron) {
-      // Try to get the API from the preload bridge
+      // Get desktop version
       const api = getElectronAPI();
-      if (api) {
-        setDesktopVersion(api.appVersion || "0.0.0");
+      if (api?.appVersion) {
+        setDesktopVersion(api.appVersion);
       } else {
         const uaMatch = navigator.userAgent.match(/ausverse-ai-desktop\/([\d.]+)/);
         if (uaMatch) setDesktopVersion(uaMatch[1]);
       }
 
-      // Load agent settings: try Electron IPC first, fall back to localStorage
-      if (api) {
-        const timeout = setTimeout(() => {
-          // IPC timed out — fall back to localStorage
-          const local = loadLocalAgentSettings();
-          setAgentEnabled(local.enabled);
-          setAgentShortcut(electronToDisplay(local.shortcut));
-          setAgentLoaded(true);
-        }, 3000);
-        api.getAgentSettings().then((s) => {
-          clearTimeout(timeout);
-          if (s && typeof s.enabled === "boolean") {
-            setAgentEnabled(s.enabled);
-            setAgentShortcut(electronToDisplay(s.shortcut || "CommandOrControl+Shift+A"));
-            // Sync to localStorage as cache
-            saveLocalAgentSettings({ enabled: s.enabled, shortcut: s.shortcut });
-          }
-          setAgentLoaded(true);
-        }).catch(() => {
-          clearTimeout(timeout);
-          const local = loadLocalAgentSettings();
-          setAgentEnabled(local.enabled);
-          setAgentShortcut(electronToDisplay(local.shortcut));
-          setAgentLoaded(true);
-        });
-      } else {
-        // No Electron API — use localStorage settings
-        const local = loadLocalAgentSettings();
-        setAgentEnabled(local.enabled);
-        setAgentShortcut(electronToDisplay(local.shortcut));
-        setAgentLoaded(true);
-      }
+      // Agent settings: localStorage is source of truth, always loads instantly
+      const local = loadLocalAgentSettings();
+      setAgentEnabled(local.enabled);
+      setAgentShortcut(electronToDisplay(local.shortcut));
+      setAgentLoaded(true);
     }
     setUa(navigator.userAgent);
     const ua = navigator.userAgent;
@@ -810,29 +783,15 @@ export default function SettingsPage() {
 
           {tab === "agent" && environment === "Desktop" && (<div className="fade-up">
             <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, letterSpacing: -0.3 }}>Agent</h2>
-            <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 20 }}>
-              Background intelligence agent that analyses your screen.
-              {!agentLoaded && <span style={{ color: "var(--warning)", marginLeft: 8 }}>Connecting...</span>}
-            </p>
+            <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 20 }}>Background intelligence agent that analyses your screen.</p>
             <div className="flex flex-col gap-4">
               <Card>
                 <Row label="Enable AIA Agent" desc="Run the agent in the background with a global shortcut to capture and analyse anything on screen">
-                  <Toggle value={agentEnabled} onChange={async (v) => {
+                  <Toggle value={agentEnabled} onChange={(v) => {
                     setAgentEnabled(v);
-                    const api = getElectronAPI();
-                    if (api) {
-                      try {
-                        const res = await api.setAgentSettings({ enabled: v });
-                        if (v && res?.shortcutStatus === "taken") {
-                          alert("Shortcut is already in use by another app. Try changing it below.");
-                          setAgentEnabled(false);
-                          await api.setAgentSettings({ enabled: false });
-                          saveLocalAgentSettings({ enabled: false, shortcut: agentShortcut });
-                          return;
-                        }
-                      } catch {}
-                    }
                     saveLocalAgentSettings({ enabled: v, shortcut: agentShortcut });
+                    const api = getElectronAPI();
+                    if (api) api.setAgentSettings({ enabled: v }).catch(() => {});
                   }} />
                 </Row>
                 <Row label="Shortcut" desc="Global keyboard shortcut to trigger screen capture" last>
@@ -869,9 +828,9 @@ export default function SettingsPage() {
 
                           setAgentShortcut(displayStr);
                           setRecordingKeybind(false);
-                          const api = getElectronAPI();
-                          if (api) { try { api.setAgentSettings({ shortcut: electronStr }); } catch {} }
                           saveLocalAgentSettings({ enabled: agentEnabled, shortcut: electronStr });
+                          const api = getElectronAPI();
+                          if (api) api.setAgentSettings({ shortcut: electronStr }).catch(() => {});
                         }}
                         onBlur={() => setTimeout(() => setRecordingKeybind(false), 200)}
                         style={{
@@ -902,11 +861,14 @@ export default function SettingsPage() {
               </Card>
               <Card>
                 <Row label="Test capture" desc="Trigger a screen capture to verify the agent is working" last>
-                  <Btn disabled={!agentEnabled} onClick={async () => {
+                  <Btn disabled={!agentEnabled} onClick={() => {
                     const api = getElectronAPI();
                     if (api) {
-                      const res = await api.testAgentCapture();
-                      if (res.status === "error") alert("Capture failed: " + res.message);
+                      api.testAgentCapture().then((res) => {
+                        if (res.status === "error") alert("Capture failed: " + res.message);
+                      }).catch(() => alert("Could not connect to desktop app."));
+                    } else {
+                      alert("Desktop app connection unavailable. Try restarting the app.");
                     }
                   }}>Test</Btn>
                 </Row>
@@ -928,12 +890,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </Card>
-              {!agentLoaded && (
-                <div className="card-glass" style={{ padding: "14px 18px", textAlign: "center" }}>
-                  <p style={{ fontSize: 12, color: "var(--warning)" }}>Waiting for desktop app connection...</p>
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>If this persists, try restarting the app.</p>
-                </div>
-              )}
             </div>
           </div>)}
 
