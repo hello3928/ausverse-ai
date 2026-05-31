@@ -20,6 +20,25 @@ function getElectronAPI(): ElectronAPI | null {
   return (window as any).electronAPI ?? null;
 }
 
+// localStorage fallback for agent settings when Electron IPC is unavailable
+function loadLocalAgentSettings(): { enabled: boolean; shortcut: string } {
+  try {
+    const raw = localStorage.getItem("aia-agent-settings");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        enabled: parsed.enabled ?? false,
+        shortcut: parsed.shortcut ?? "CommandOrControl+Shift+A",
+      };
+    }
+  } catch {}
+  return { enabled: false, shortcut: "CommandOrControl+Shift+A" };
+}
+
+function saveLocalAgentSettings(s: { enabled: boolean; shortcut: string }) {
+  try { localStorage.setItem("aia-agent-settings", JSON.stringify(s)); } catch {}
+}
+
 type Theme = "dark" | "light" | "system";
 type FontSize = "sm" | "md" | "lg";
 type Density = "compact" | "default" | "comfortable";
@@ -289,9 +308,18 @@ export default function SettingsPage() {
       const api = getElectronAPI();
       if (api) {
         setDesktopVersion(api.appVersion || "0.0.0");
-        // Timeout: if IPC doesn't respond in 3 seconds, show defaults
+      } else {
+        const uaMatch = navigator.userAgent.match(/ausverse-ai-desktop\/([\d.]+)/);
+        if (uaMatch) setDesktopVersion(uaMatch[1]);
+      }
+
+      // Load agent settings: try Electron IPC first, fall back to localStorage
+      if (api) {
         const timeout = setTimeout(() => {
-          console.warn("Agent settings IPC timed out, using defaults");
+          // IPC timed out — fall back to localStorage
+          const local = loadLocalAgentSettings();
+          setAgentEnabled(local.enabled);
+          setAgentShortcut(electronToDisplay(local.shortcut));
           setAgentLoaded(true);
         }, 3000);
         api.getAgentSettings().then((s) => {
@@ -299,18 +327,22 @@ export default function SettingsPage() {
           if (s && typeof s.enabled === "boolean") {
             setAgentEnabled(s.enabled);
             setAgentShortcut(electronToDisplay(s.shortcut || "CommandOrControl+Shift+A"));
+            // Sync to localStorage as cache
+            saveLocalAgentSettings({ enabled: s.enabled, shortcut: s.shortcut });
           }
           setAgentLoaded(true);
-        }).catch((err) => {
+        }).catch(() => {
           clearTimeout(timeout);
-          console.error("Failed to load agent settings:", err);
+          const local = loadLocalAgentSettings();
+          setAgentEnabled(local.enabled);
+          setAgentShortcut(electronToDisplay(local.shortcut));
           setAgentLoaded(true);
         });
       } else {
-        // Electron detected by UA but preload API missing
-        console.warn("Electron detected but electronAPI not available — preload may have failed");
-        const uaMatch = navigator.userAgent.match(/ausverse-ai-desktop\/([\d.]+)/);
-        if (uaMatch) setDesktopVersion(uaMatch[1]);
+        // No Electron API — use localStorage settings
+        const local = loadLocalAgentSettings();
+        setAgentEnabled(local.enabled);
+        setAgentShortcut(electronToDisplay(local.shortcut));
         setAgentLoaded(true);
       }
     }
@@ -789,13 +821,18 @@ export default function SettingsPage() {
                     setAgentEnabled(v);
                     const api = getElectronAPI();
                     if (api) {
-                      const res = await api.setAgentSettings({ enabled: v });
-                      if (v && res?.shortcutStatus === "taken") {
-                        alert("Shortcut is already in use by another app. Try changing it below.");
-                        setAgentEnabled(false);
-                        await api.setAgentSettings({ enabled: false });
-                      }
+                      try {
+                        const res = await api.setAgentSettings({ enabled: v });
+                        if (v && res?.shortcutStatus === "taken") {
+                          alert("Shortcut is already in use by another app. Try changing it below.");
+                          setAgentEnabled(false);
+                          await api.setAgentSettings({ enabled: false });
+                          saveLocalAgentSettings({ enabled: false, shortcut: agentShortcut });
+                          return;
+                        }
+                      } catch {}
                     }
+                    saveLocalAgentSettings({ enabled: v, shortcut: agentShortcut });
                   }} />
                 </Row>
                 <Row label="Shortcut" desc="Global keyboard shortcut to trigger screen capture" last>
@@ -833,7 +870,8 @@ export default function SettingsPage() {
                           setAgentShortcut(displayStr);
                           setRecordingKeybind(false);
                           const api = getElectronAPI();
-                          if (api) api.setAgentSettings({ shortcut: electronStr });
+                          if (api) { try { api.setAgentSettings({ shortcut: electronStr }); } catch {} }
+                          saveLocalAgentSettings({ enabled: agentEnabled, shortcut: electronStr });
                         }}
                         onBlur={() => setTimeout(() => setRecordingKeybind(false), 200)}
                         style={{

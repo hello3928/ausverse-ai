@@ -447,6 +447,13 @@ function createWindow() {
 
   Menu.setApplicationMenu(null);
 
+  // Ctrl+Shift+D to open DevTools
+  mainWindow.webContents.on("before-input-event", (_e, input) => {
+    if (input.control && input.shift && input.key === "D") {
+      mainWindow.webContents.toggleDevTools();
+    }
+  });
+
   mainWindow.webContents.on("did-finish-load", () => {
     mainWindow.webContents.insertCSS(TITLEBAR_CSS);
     if (updateReady) injectUpdateIcon();
