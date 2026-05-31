@@ -231,7 +231,7 @@ export default function SettingsPage() {
   const [platform, setPlatform]   = useState("");
   const [environment, setEnvironment] = useState("");
   const [desktopVersion, setDesktopVersion] = useState("0.0.0");
-  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "up-to-date" | "available" | "error">("idle");
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "up-to-date" | "available" | "installing" | "error">("idle");
   const [updateVersion, setUpdateVersion] = useState("");
 
   const [agentEnabled, setAgentEnabled] = useState(false);
@@ -917,6 +917,14 @@ export default function SettingsPage() {
                     <Btn
                       onClick={async () => {
                         const api = getElectronAPI();
+
+                        // If update is ready, install it
+                        if (updateStatus === "available" && api) {
+                          setUpdateStatus("installing");
+                          api.installUpdate();
+                          return;
+                        }
+
                         setUpdateStatus("checking");
                         if (!api) {
                           await new Promise(r => setTimeout(r, 800));
@@ -939,10 +947,11 @@ export default function SettingsPage() {
                         }
                         setTimeout(() => setUpdateStatus("idle"), 8000);
                       }}
-                      disabled={updateStatus === "checking"}
+                      disabled={updateStatus === "checking" || updateStatus === ("installing")}
                       variant={updateStatus === "available" ? "primary" : "ghost"}
                     >
                       {updateStatus === "checking" ? "Checking..." :
+                       updateStatus === ("installing") ? "Installing... restarting" :
                        updateStatus === "up-to-date" ? "Up to date ✓" :
                        updateStatus === "available" ? `Install v${updateVersion}` :
                        updateStatus === "error" ? "Failed — retry" :

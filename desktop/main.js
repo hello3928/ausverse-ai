@@ -598,23 +598,9 @@ app.on("ready", () => {
   // Apply agent shortcut if enabled
   applyAgentShortcut();
 
-  // IPC: install update — show progress then restart
+  // IPC: install update — quit and install immediately
   ipcMain.on("install-update", () => {
-    // Show a dialog so the user knows what's happening
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      dialog.showMessageBox(mainWindow, {
-        type: "info",
-        title: "Installing Update",
-        message: "Installing update...",
-        detail: "The app will restart in a moment.",
-        buttons: ["OK"],
-        noLink: true,
-      }).then(() => {
-        autoUpdater.quitAndInstall(false, true);
-      });
-    } else {
-      autoUpdater.quitAndInstall(false, true);
-    }
+    autoUpdater.quitAndInstall(false, true);
   });
 
   // IPC: check for updates (settings page)
