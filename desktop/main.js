@@ -511,25 +511,66 @@ async function showAgentPromptIfNeeded() {
 
   if (!loggedIn || !mainWindow || mainWindow.isDestroyed()) return;
 
-  const shortcut = settings.shortcut || DEFAULT_SETTINGS.shortcut;
-  const result = await dialog.showMessageBox(mainWindow, {
-    type: "question",
-    title: "AIA Agent",
-    message: "Enable the AIA Agent?",
-    detail: `A background intelligence agent that runs on your desktop. Press ${shortcut} anywhere to screenshot and analyse anything on screen with AI.\n\nYou can change this later in Settings → Agent.`,
-    buttons: ["Enable Agent", "Not now"],
-    defaultId: 0,
-    cancelId: 1,
-    noLink: true,
-  });
+  const shortcut = (settings.shortcut || DEFAULT_SETTINGS.shortcut)
+    .replace("CommandOrControl", "Ctrl")
+    .replace("CmdOrCtrl", "Ctrl");
 
-  const enabled = result.response === 0;
+  // Inject a styled prompt into the page
+  const enabled = await mainWindow.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      if (document.getElementById('aia-agent-prompt')) { resolve(false); return; }
+
+      var overlay = document.createElement('div');
+      overlay.id = 'aia-agent-prompt';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:aiaFadeIn 0.2s ease;';
+
+      var style = document.createElement('style');
+      style.textContent = '@keyframes aiaFadeIn{from{opacity:0}to{opacity:1}} @keyframes aiaSlideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}';
+      document.head.appendChild(style);
+
+      var card = document.createElement('div');
+      card.style.cssText = 'width:380px;background:rgba(18,18,22,0.95);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:28px 24px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);animation:aiaSlideUp 0.25s ease;font-family:inherit;';
+
+      card.innerHTML = \`
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.2);display:flex;align-items:center;justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-2h2v2h-2zm0-4V7h2v6h-2z" fill="rgba(220,38,38,0.8)"/>
+            </svg>
+          </div>
+          <div>
+            <p style="font-size:15px;font-weight:600;color:#f0f0f0;margin:0;">AIA Agent</p>
+            <p style="font-size:11px;color:#888;margin:2px 0 0;">Background Intelligence System</p>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#aaa;line-height:1.7;margin-bottom:6px;">
+          A background agent that runs on your desktop. Press <kbd style="font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:2px 6px;color:#ccc;">${shortcut}</kbd> anywhere to screenshot and analyse anything on screen with AI.
+        </p>
+        <p style="font-size:11px;color:#666;margin-bottom:20px;">You can change this later in Settings → Agent.</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button id="aia-prompt-dismiss" style="font-size:12px;font-weight:500;color:#888;padding:8px 16px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.03);cursor:pointer;font-family:inherit;transition:border-color 0.15s;">Not now</button>
+          <button id="aia-prompt-enable" style="font-size:12px;font-weight:500;color:#fff;padding:8px 16px;border:1px solid rgba(220,38,38,0.3);border-radius:8px;background:rgba(220,38,38,0.15);cursor:pointer;font-family:inherit;transition:background 0.15s;">Enable Agent</button>
+        </div>
+      \`;
+
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+
+      overlay.addEventListener('click', function(e) { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+      document.getElementById('aia-prompt-dismiss').onclick = function() { overlay.remove(); resolve(false); };
+      document.getElementById('aia-prompt-enable').onclick = function() { overlay.remove(); resolve(true); };
+      document.getElementById('aia-prompt-enable').onmouseenter = function() { this.style.background = 'rgba(220,38,38,0.25)'; };
+      document.getElementById('aia-prompt-enable').onmouseleave = function() { this.style.background = 'rgba(220,38,38,0.15)'; };
+      document.getElementById('aia-prompt-dismiss').onmouseenter = function() { this.style.borderColor = 'rgba(255,255,255,0.15)'; };
+      document.getElementById('aia-prompt-dismiss').onmouseleave = function() { this.style.borderColor = 'rgba(255,255,255,0.08)'; };
+    });
+  `);
+
   settings.promptShown = true;
   settings.enabled = enabled;
   saveAgentSettings(settings);
-  const shortcutStatus = applyAgentShortcut();
+  applyAgentShortcut();
   updateTrayMenu();
-  console.log("agent-prompt:", { enabled, shortcutStatus });
 }
 
 // ── Single instance lock ─────────────────────────────────
