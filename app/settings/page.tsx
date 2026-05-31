@@ -285,11 +285,26 @@ export default function SettingsPage() {
     setEnvironment(isElectron ? "Desktop" : window.matchMedia("(display-mode: standalone)").matches ? "PWA" : "Web");
     if (isElectron && api) {
       setDesktopVersion(api.appVersion || "0.0.0");
-      api.getAgentSettings().then((s) => {
-        setAgentEnabled(s.enabled);
-        setAgentShortcut(electronToDisplay(s.shortcut));
+      // Timeout: if IPC doesn't respond in 3 seconds, show defaults
+      const timeout = setTimeout(() => {
+        console.warn("Agent settings IPC timed out, using defaults");
         setAgentLoaded(true);
-      }).catch(() => setAgentLoaded(true));
+      }, 3000);
+      api.getAgentSettings().then((s) => {
+        clearTimeout(timeout);
+        if (s && typeof s.enabled === "boolean") {
+          setAgentEnabled(s.enabled);
+          setAgentShortcut(electronToDisplay(s.shortcut || "CommandOrControl+Shift+A"));
+        }
+        setAgentLoaded(true);
+      }).catch((err) => {
+        clearTimeout(timeout);
+        console.error("Failed to load agent settings:", err);
+        setAgentLoaded(true);
+      });
+    } else {
+      // Not in Electron but somehow showing agent tab — mark as loaded
+      setAgentLoaded(true);
     }
     setUa(navigator.userAgent);
     const ua = navigator.userAgent;
@@ -755,7 +770,10 @@ export default function SettingsPage() {
 
           {tab === "agent" && environment === "Desktop" && (<div className="fade-up">
             <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, letterSpacing: -0.3 }}>Agent</h2>
-            <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 20 }}>Background intelligence agent that analyses your screen.</p>
+            <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 20 }}>
+              Background intelligence agent that analyses your screen.
+              {!agentLoaded && <span style={{ color: "var(--warning)", marginLeft: 8 }}>Connecting...</span>}
+            </p>
             <div className="flex flex-col gap-4">
               <Card>
                 <Row label="Enable AIA Agent" desc="Run the agent in the background with a global shortcut to capture and analyse anything on screen">
@@ -865,7 +883,10 @@ export default function SettingsPage() {
                 </div>
               </Card>
               {!agentLoaded && (
-                <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>Loading agent settings...</p>
+                <div className="card-glass" style={{ padding: "14px 18px", textAlign: "center" }}>
+                  <p style={{ fontSize: 12, color: "var(--warning)" }}>Waiting for desktop app connection...</p>
+                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>If this persists, try restarting the app.</p>
+                </div>
               )}
             </div>
           </div>)}
