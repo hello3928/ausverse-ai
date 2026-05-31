@@ -4,6 +4,22 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { AVATARS } from "@/lib/avatars";
 import PageShell from "@/components/layout/PageShell";
 
+// Electron API type (exposed via preload.js in the desktop app)
+interface ElectronAPI {
+  isElectron: boolean;
+  appVersion: string;
+  installUpdate: () => void;
+  checkForUpdates: () => Promise<{ status: string; version?: string; message?: string }>;
+  getAgentSettings: () => Promise<{ enabled: boolean; shortcut: string }>;
+  setAgentSettings: (settings: object) => Promise<{ enabled?: boolean; shortcut?: string; shortcutStatus?: string }>;
+  testAgentCapture: () => Promise<{ status: string; shortcutRegistered?: boolean; message?: string }>;
+}
+
+function getElectronAPI(): ElectronAPI | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).electronAPI ?? null;
+}
+
 type Theme = "dark" | "light" | "system";
 type FontSize = "sm" | "md" | "lg";
 type Density = "compact" | "default" | "comfortable";
@@ -264,23 +280,16 @@ export default function SettingsPage() {
       }
     }).catch(() => {});
 
-    const isElectron = /Electron/i.test(navigator.userAgent);
+    const api = getElectronAPI();
+    const isElectron = !!api;
     setEnvironment(isElectron ? "Desktop" : window.matchMedia("(display-mode: standalone)").matches ? "PWA" : "Web");
-    if (isElectron) {
-      const api = (window as unknown as { electronAPI?: { appVersion?: string; getAgentSettings?: () => Promise<{ enabled: boolean; shortcut: string }> } }).electronAPI;
-      if (api?.appVersion) {
-        setDesktopVersion(api.appVersion);
-      } else {
-        const uaMatch = navigator.userAgent.match(/ausverse-ai-desktop\/([\d.]+)/);
-        if (uaMatch) setDesktopVersion(uaMatch[1]);
-      }
-      if (api?.getAgentSettings) {
-        api.getAgentSettings().then((s) => {
-          setAgentEnabled(s.enabled);
-          setAgentShortcut(electronToDisplay(s.shortcut));
-          setAgentLoaded(true);
-        }).catch(() => setAgentLoaded(true));
-      }
+    if (isElectron && api) {
+      setDesktopVersion(api.appVersion || "0.0.0");
+      api.getAgentSettings().then((s) => {
+        setAgentEnabled(s.enabled);
+        setAgentShortcut(electronToDisplay(s.shortcut));
+        setAgentLoaded(true);
+      }).catch(() => setAgentLoaded(true));
     }
     setUa(navigator.userAgent);
     const ua = navigator.userAgent;
@@ -752,8 +761,8 @@ export default function SettingsPage() {
                 <Row label="Enable AIA Agent" desc="Run the agent in the background with a global shortcut to capture and analyse anything on screen">
                   <Toggle value={agentEnabled} onChange={async (v) => {
                     setAgentEnabled(v);
-                    const api = (window as unknown as { electronAPI?: { setAgentSettings?: (s: object) => Promise<{ shortcutStatus?: string }> } }).electronAPI;
-                    if (api?.setAgentSettings) {
+                    const api = getElectronAPI();
+                    if (api) {
                       const res = await api.setAgentSettings({ enabled: v });
                       if (v && res?.shortcutStatus === "taken") {
                         alert("Shortcut is already in use by another app. Try changing it below.");
@@ -797,8 +806,8 @@ export default function SettingsPage() {
 
                           setAgentShortcut(displayStr);
                           setRecordingKeybind(false);
-                          const api = (window as unknown as { electronAPI?: { setAgentSettings?: (s: object) => Promise<unknown> } }).electronAPI;
-                          if (api?.setAgentSettings) api.setAgentSettings({ shortcut: electronStr });
+                          const api = getElectronAPI();
+                          if (api) api.setAgentSettings({ shortcut: electronStr });
                         }}
                         onBlur={() => setTimeout(() => setRecordingKeybind(false), 200)}
                         style={{
@@ -830,8 +839,8 @@ export default function SettingsPage() {
               <Card>
                 <Row label="Test capture" desc="Trigger a screen capture to verify the agent is working" last>
                   <Btn disabled={!agentEnabled} onClick={async () => {
-                    const api = (window as unknown as { electronAPI?: { testAgentCapture?: () => Promise<{ status: string; shortcutRegistered?: boolean; message?: string }> } }).electronAPI;
-                    if (api?.testAgentCapture) {
+                    const api = getElectronAPI();
+                    if (api) {
                       const res = await api.testAgentCapture();
                       if (res.status === "error") alert("Capture failed: " + res.message);
                     }
@@ -884,13 +893,12 @@ export default function SettingsPage() {
                   } last>
                     <Btn
                       onClick={async () => {
-                        const api = (window as unknown as { electronAPI?: { checkForUpdates?: () => Promise<{ status: string; version?: string; message?: string }> } }).electronAPI;
+                        const api = getElectronAPI();
                         setUpdateStatus("checking");
-                        if (!api?.checkForUpdates) {
-                          // Old Electron build without IPC support
+                        if (!api) {
                           await new Promise(r => setTimeout(r, 800));
                           setUpdateStatus("up-to-date");
-                          setTimeout(() => setUpdateStatus("idle"), 5000);
+                          setTimeout(() => setUpdateStatus("idle"), 8000);
                           return;
                         }
                         try {
@@ -906,13 +914,15 @@ export default function SettingsPage() {
                         } catch {
                           setUpdateStatus("error");
                         }
-                        setTimeout(() => setUpdateStatus("idle"), 5000);
+                        setTimeout(() => setUpdateStatus("idle"), 8000);
                       }}
                       disabled={updateStatus === "checking"}
+                      variant={updateStatus === "available" ? "primary" : "ghost"}
                     >
                       {updateStatus === "checking" ? "Checking..." :
-                       updateStatus === "up-to-date" ? "Up to date" :
-                       updateStatus === "available" ? "Update available" :
+                       updateStatus === "up-to-date" ? "Up to date ✓" :
+                       updateStatus === "available" ? `Install v${updateVersion}` :
+                       updateStatus === "error" ? "Failed — retry" :
                        "Check for updates"}
                     </Btn>
                   </Row>

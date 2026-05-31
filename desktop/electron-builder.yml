@@ -22,6 +22,8 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: "Ausverse AI"
+  installerIcon: icon.ico
+  uninstallerIcon: icon.ico
 
 files:
   - main.js
